@@ -6,9 +6,6 @@ import (
 
 const version = "v0.0.1"
 
-func init(){
-	modules.Register("k6/x/nebulagraph",  New())
+func init() {
+	modules.Register("k6/x/nebulagraph", New())
 }
-
-
-
