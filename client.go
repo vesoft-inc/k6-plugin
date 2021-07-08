@@ -33,6 +33,7 @@ func formatOutput(o *Output) []string {
 }
 
 var OutputHeader []string = []string{
+	"timestamp",
 	"nGQL",
 	"latency",
 	"responseTime",

@@ -121,7 +121,7 @@ The `output.csv` saves data as below:
 ```bash
 >head output.csv                                                                          
 
-nGQL,latency,responseTime,isSucceed,rows,errorMsg
+timestamp,nGQL,latency,responseTime,isSucceed,rows,errorMsg
 1625647825,USE sf1,7808,10775,true,0,
 1625647825,USE sf1,4055,7725,true,0,
 1625647825,USE sf1,3431,10231,true,0,
