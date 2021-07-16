@@ -28,9 +28,21 @@ export function setup() {
 
 export default function (data) {
 	// get csv data from csv file
-	let d = pool.getData()
-	// d[0] means the first column data in the csv file
-	let ngql = 'go 2 steps from ' + d[0] + ' over KNOWS '
+	let ngql = 'INSERT VERTEX Person(firstName, lastName, gender, birthday, creationDate, locationIP, browserUsed) VALUES '
+	let batches = []
+	// batch size 100
+	for (let i = 0; i < 100; i++) {
+		let d = pool.getData();
+		let values = []
+		// concat the insert value
+		for (let index = 1; index < 8; index++) {
+			let value = '"' + d[index] + '"'
+			values.push(value)
+		}
+		let batch = d[0] + ":(" + values.join(",") + ")"
+		batches.push(batch)
+	}
+	ngql = ngql + batches.join(',')
 	let response = session.execute(ngql)
 	check(response, {
 		"IsSucceed": (r) => r.isSucceed() === true

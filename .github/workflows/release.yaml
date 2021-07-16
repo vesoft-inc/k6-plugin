@@ -33,3 +33,4 @@ jobs:
           files: |
             k6-darwin-amd64
             k6-linux-amd64
+            k6-linux-arm64
