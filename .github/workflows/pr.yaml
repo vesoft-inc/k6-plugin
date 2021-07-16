@@ -1,0 +1,30 @@
+name: release
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+
+jobs:
+  package:
+    name: package and upload release assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v1
+        with:
+          go-version: 1.16.4
+
+      - name: build
+        env:
+          CGO_ENABLED: 0
+        run: |
+          export GOPATH=$HOME/go
+          export GOBIN=$(go env GOPATH)/bin
+          export PATH=$PATH:$GOBIN
+          make build-all
+          ls -lh k6*
