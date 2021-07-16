@@ -48,13 +48,14 @@ type Response struct {
 }
 
 type NebulaPool struct {
-	HostList    []nebula.HostAddress
-	Pool        *nebula.ConnectionPool
-	Log         nebula.Logger
-	DataCh      chan Data
-	OutoptCh    chan []string
-	initialized bool
-	Sessions    []*nebula.Session
+	HostList          []nebula.HostAddress
+	Pool              *nebula.ConnectionPool
+	Log               nebula.Logger
+	DataCh            chan Data
+	OutoptCh          chan []string
+	initialized       bool
+	Sessions          []*nebula.Session
+	ChannelBufferSize int
 }
 
 type NebulaSession struct {
@@ -75,8 +76,7 @@ func (np *NebulaPool) Init(address string, concurrent int) (*NebulaPool, error) 
 	}
 	np.Log.Info("begin init the nebula pool")
 	np.Sessions = make([]*nebula.Session, concurrent)
-	np.DataCh = make(chan Data, 20000)
-	np.OutoptCh = make(chan []string, 20000)
+	np.ChannelBufferSize = 20000
 	addrs := strings.Split(address, ",")
 	var hosts []nebula.HostAddress
 	for _, addr := range addrs {
@@ -109,8 +109,12 @@ func (np *NebulaPool) Init(address string, concurrent int) (*NebulaPool, error) 
 	np.initialized = true
 	return np, nil
 }
+func (np *NebulaPool) ConfigBufferSize(size int) {
+	np.ChannelBufferSize = size
+}
 
 func (np *NebulaPool) ConfigCSV(path, delimiter string, withHeader bool) error {
+	np.DataCh = make(chan Data, np.ChannelBufferSize)
 	reader := NewCsvReader(path, delimiter, withHeader, np.DataCh)
 	if err := reader.ReadForever(); err != nil {
 		return err
@@ -119,6 +123,7 @@ func (np *NebulaPool) ConfigCSV(path, delimiter string, withHeader bool) error {
 }
 
 func (np *NebulaPool) ConfigOutput(path string) error {
+	np.OutoptCh = make(chan []string, np.ChannelBufferSize)
 	writer := NewCsvWriter(path, ",", OutputHeader, np.OutoptCh)
 	if err := writer.WriteForever(); err != nil {
 		return err
@@ -127,7 +132,7 @@ func (np *NebulaPool) ConfigOutput(path string) error {
 }
 
 func (np *NebulaPool) GetData() (Data, error) {
-	if len(np.DataCh) != 0 {
+	if np.DataCh != nil && len(np.DataCh) != 0 {
 		if d, ok := <-np.DataCh; ok {
 			return d, nil
 		}
@@ -170,7 +175,7 @@ func (s *NebulaSession) Execute(stmt string) (*Response, error) {
 	}
 
 	// output
-	if len(s.Pool.OutoptCh) != cap(s.Pool.OutoptCh) {
+	if s.Pool.OutoptCh != nil && len(s.Pool.OutoptCh) != cap(s.Pool.OutoptCh) {
 		o := &Output{
 			TimeStamp:    start.Unix(),
 			NGQL:         stmt,

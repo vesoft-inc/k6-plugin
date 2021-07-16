@@ -37,6 +37,8 @@ var lantencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 // initial nebula connect pool
 var pool = nebulaPool.init("192.168.8.152:9669", 400);
+// by default the channel buffer size is 20000, you can reset it
+// pool.configBufferSize(100000)
 // initial session for every vu
 var session = pool.getSession("root", "nebula")
 session.execute("USE sf1")
