@@ -1,9 +1,12 @@
 name: release
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
 
 jobs:
   package:
@@ -24,13 +27,4 @@ jobs:
           export GOBIN=$(go env GOPATH)/bin
           export PATH=$PATH:$GOBIN
           make build-all
-
-      - name: upload release asset
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          files: |
-            k6-darwin-amd64
-            k6-linux-amd64
-            k6-linux-arm64
+          ls -lh k6*
