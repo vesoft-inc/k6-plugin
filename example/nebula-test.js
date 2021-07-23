@@ -28,7 +28,7 @@ export function setup() {
 
 export default function (data) {
 	// get csv data from csv file
-	let d = pool.getData()
+	let d = session.getData()
 	// d[0] means the first column data in the csv file
 	let ngql = 'go 2 steps from ' + d[0] + ' over KNOWS '
 	let response = session.execute(ngql)

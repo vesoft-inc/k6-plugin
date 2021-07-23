@@ -36,9 +36,14 @@ import { sleep } from 'k6';
 var lantencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 // initial nebula connect pool
+// by default the channel buffer size is 20000, you can reset it with
+
+// var pool = nebulaPool.initWithSize("192.168.8.152:9669", 400, 4000);
+
 var pool = nebulaPool.init("192.168.8.152:9669", 400);
-// by default the channel buffer size is 20000, you can reset it
-// pool.configBufferSize(100000)
+
+
+
 // initial session for every vu
 var session = pool.getSession("root", "nebula")
 session.execute("USE sf1")
@@ -54,7 +59,7 @@ export function setup() {
 
 export default function (data) {
   // get csv data from csv file
-  let d = pool.getData()
+  let d = session.getData()
   // d[0] means the first column data in the csv file
   let ngql = 'go 2 steps from ' + d[0] + ' over KNOWS '
   let response = session.execute(ngql)
@@ -134,3 +139,24 @@ timestamp,nGQL,latency,responseTime,isSucceed,rows,errorMsg
 1625647826,go 2 steps from 4194 over KNOWS ,6317,26309,true,1581,
 1625647826,go 2 steps from 8698 over KNOWS ,4388,22597,true,1530,
 ```
+
+## Advanced usage
+
+By default, all vus use the same channel to read the csv data.
+
+You can change the strategy before `getSession` function.
+
+As each vu uses a separate channel, you can reduce channel buffer size to save memory.
+
+```js
+// initial nebula connect pool, channel buffer size is 4000
+var pool = nebulaPool.initWithSize("192.168.8.61:9669", 400, 4000);
+
+// set csv strategy, 1 means each vu has a separate csv reader.
+pool.configCsvStrategy(1)
+
+// initial session for every vu
+var session = pool.getSession("root", "nebula")
+```
+
+Please refer to [nebula-test-insert.js](./example/nebula-test-insert.js) for more details.

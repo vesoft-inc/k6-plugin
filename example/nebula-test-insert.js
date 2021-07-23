@@ -6,7 +6,11 @@ import { sleep } from 'k6';
 var lantencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 // initial nebula connect pool
-var pool = nebulaPool.init("192.168.8.152:9669", 400);
+var pool = nebulaPool.initWithSize("192.168.8.61:9669", 400, 4000);
+
+// set csv strategy, 1 means each vu has a separate csv reader.
+pool.configCsvStrategy(1)
+
 // initial session for every vu
 var session = pool.getSession("root", "nebula")
 session.execute("USE sf1")
@@ -32,7 +36,7 @@ export default function (data) {
 	let batches = []
 	// batch size 100
 	for (let i = 0; i < 100; i++) {
-		let d = pool.getData();
+		let d = session.getData();
 		let values = []
 		// concat the insert value
 		for (let index = 1; index < 8; index++) {
