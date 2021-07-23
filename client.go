@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	nebula "github.com/vesoft-inc/nebula-go/v2"
 )
 
 type Data []string
+
 type Output struct {
 	TimeStamp    int64
 	NGQL         string
@@ -46,37 +48,55 @@ type Response struct {
 	*nebula.ResultSet
 	ResponseTime int32
 }
+type CSVReaderStrategy int
+
+const (
+	AllInOne CSVReaderStrategy = iota
+	Separate
+)
 
 type NebulaPool struct {
 	HostList          []nebula.HostAddress
 	Pool              *nebula.ConnectionPool
 	Log               nebula.Logger
-	DataCh            chan Data
+	DataChs           []chan Data
 	OutoptCh          chan []string
+	Version           string
+	csvStrategy       CSVReaderStrategy
 	initialized       bool
-	Sessions          []*nebula.Session
-	ChannelBufferSize int
+	sessions          []*nebula.Session
+	channelBufferSize int
+	mutex             sync.Mutex
 }
 
 type NebulaSession struct {
 	Session *nebula.Session
 	Pool    *NebulaPool
+	DataCh  chan Data
 }
 
 func New() *NebulaPool {
 	return &NebulaPool{
 		Log:         nebula.DefaultLogger{},
 		initialized: false,
+		Version:     version,
 	}
 }
 
 func (np *NebulaPool) Init(address string, concurrent int) (*NebulaPool, error) {
+	return np.InitWithSize(address, concurrent, 20000)
+
+}
+
+func (np *NebulaPool) InitWithSize(address string, concurrent int, size int) (*NebulaPool, error) {
 	if np.initialized {
 		return np, nil
 	}
 	np.Log.Info("begin init the nebula pool")
-	np.Sessions = make([]*nebula.Session, concurrent)
-	np.ChannelBufferSize = 20000
+	np.sessions = make([]*nebula.Session, concurrent)
+	np.channelBufferSize = size
+	np.OutoptCh = make(chan []string, np.channelBufferSize)
+
 	addrs := strings.Split(address, ",")
 	var hosts []nebula.HostAddress
 	for _, addr := range addrs {
@@ -109,21 +129,22 @@ func (np *NebulaPool) Init(address string, concurrent int) (*NebulaPool, error) 
 	np.initialized = true
 	return np, nil
 }
-func (np *NebulaPool) ConfigBufferSize(size int) {
-	np.ChannelBufferSize = size
+
+func (np *NebulaPool) ConfigCsvStrategy(strategy int) {
+	np.csvStrategy = CSVReaderStrategy(strategy)
 }
 
 func (np *NebulaPool) ConfigCSV(path, delimiter string, withHeader bool) error {
-	np.DataCh = make(chan Data, np.ChannelBufferSize)
-	reader := NewCsvReader(path, delimiter, withHeader, np.DataCh)
-	if err := reader.ReadForever(); err != nil {
-		return err
+	for _, dataCh := range np.DataChs {
+		reader := NewCsvReader(path, delimiter, withHeader, dataCh)
+		if err := reader.ReadForever(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (np *NebulaPool) ConfigOutput(path string) error {
-	np.OutoptCh = make(chan []string, np.ChannelBufferSize)
 	writer := NewCsvWriter(path, ",", OutputHeader, np.OutoptCh)
 	if err := writer.WriteForever(); err != nil {
 		return err
@@ -131,21 +152,12 @@ func (np *NebulaPool) ConfigOutput(path string) error {
 	return nil
 }
 
-func (np *NebulaPool) GetData() (Data, error) {
-	if np.DataCh != nil && len(np.DataCh) != 0 {
-		if d, ok := <-np.DataCh; ok {
-			return d, nil
-		}
-	}
-	return nil, fmt.Errorf("no Data at all")
-}
-
 func (np *NebulaPool) Close() error {
 	if !np.initialized {
 		return nil
 	}
 	np.Log.Info("begin close the nebula pool")
-	for _, s := range np.Sessions {
+	for _, s := range np.sessions {
 		if s != nil {
 			s.Release()
 		}
@@ -156,13 +168,42 @@ func (np *NebulaPool) Close() error {
 }
 
 func (np *NebulaPool) GetSession(user, password string) (*NebulaSession, error) {
-
-	if session, err := np.Pool.GetSession(user, password); err != nil {
+	session, err := np.Pool.GetSession(user, password)
+	if err != nil {
 		return nil, err
-	} else {
-		np.Sessions = append(np.Sessions, session)
-		return &NebulaSession{Session: session, Pool: np}, nil
 	}
+	np.mutex.Lock()
+	defer np.mutex.Unlock()
+	np.sessions = append(np.sessions, session)
+	s := &NebulaSession{Session: session, Pool: np}
+	s.PrepareCsvReader()
+
+	return s, nil
+}
+
+func (s *NebulaSession) PrepareCsvReader() error {
+	np := s.Pool
+	if np.csvStrategy == AllInOne {
+		if len(np.DataChs) == 0 {
+			dataCh := make(chan Data, np.channelBufferSize)
+			np.DataChs = append(np.DataChs, dataCh)
+		}
+		s.DataCh = np.DataChs[0]
+	} else {
+		dataCh := make(chan Data, np.channelBufferSize)
+		np.DataChs = append(np.DataChs, dataCh)
+		s.DataCh = dataCh
+	}
+	return nil
+}
+
+func (s *NebulaSession) GetData() (Data, error) {
+	if s.DataCh != nil && len(s.DataCh) != 0 {
+		if d, ok := <-s.DataCh; ok {
+			return d, nil
+		}
+	}
+	return nil, fmt.Errorf("no Data at all")
 }
 
 func (s *NebulaSession) Execute(stmt string) (*Response, error) {
