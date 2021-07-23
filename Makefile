@@ -12,7 +12,7 @@ build-all: build-arm-v7
 	for  pair in $(pairs);do echo $$pair; \
 			os=`echo $$pair | cut -d / -f 1 ` ;\
 			arch=`echo $$pair | cut -d / -f 2 ` ;\
-			GOOS=$$os GOARCH=$$arch  xk6 build --with github.com/HarrisChu/xk6-nebula@latest \
+			GOOS=$$os GOARCH=$$arch  xk6 build --with github.com/HarrisChu/xk6-nebula@latest ;\
 			mv k6 k6-$$os-$$arch; \
 	done
 
