@@ -160,3 +160,25 @@ var session = pool.getSession("root", "nebula")
 ```
 
 Please refer to [nebula-test-insert.js](./example/nebula-test-insert.js) for more details.
+
+## Batch insert
+
+It can also use `k6` for batch insert testing.
+
+```bash
+# create schema
+cd example
+nebula-console -addr 192.168.8.61 -port 9669 -u root -p nebula -f schema.ngql
+
+# run testing
+../k6 run nebula-test-insert.js -vu 10 -d 30s 
+
+# by default, the batch size is 100, you can change it in `nebula-test-insert.js`
+
+export default function (data) {
+  // get csv data from csv file
+  let ngql = 'INSERT VERTEX Person(firstName, lastName, gender, birthday, creationDate, locationIP, browserUsed) VALUES ' 
+  let batches = []
+  let batchSize = 100
+
+```
