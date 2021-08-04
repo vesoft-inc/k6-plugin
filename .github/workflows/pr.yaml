@@ -1,4 +1,4 @@
-name: release
+name: pull_request
 
 on:
   pull_request:
@@ -23,8 +23,5 @@ jobs:
         env:
           CGO_ENABLED: 0
         run: |
-          export GOPATH=$HOME/go
-          export GOBIN=$(go env GOPATH)/bin
-          export PATH=$PATH:$GOBIN
           make build-all
           ls -lh k6*

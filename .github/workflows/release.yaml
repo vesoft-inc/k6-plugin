@@ -20,9 +20,6 @@ jobs:
         env:
           CGO_ENABLED: 0
         run: |
-          export GOPATH=$HOME/go
-          export GOBIN=$(go env GOPATH)/bin
-          export PATH=$PATH:$GOBIN
           make build-all
 
       - name: upload release asset
