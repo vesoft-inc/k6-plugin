@@ -2,7 +2,7 @@ all: build
 .PHONY: build
 
 pairs := darwin/amd64 linux/amd64 linux/arm64
-GOPATH ?= ~/g0
+GOPATH ?= ~/go
 export GO111MODULE=on
 
 build: 
