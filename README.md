@@ -4,12 +4,18 @@ This is a [k6](https://github.com/k6io/k6) extension using the [xk6](https://git
 
 Used to test [Nebula-Graph](https://github.com/vesoft-inc/nebula-graph).
 
+## Dependency
+
+* k6  v0.33.0
+* xk6 v0.4.1
+* Golang 1.16+
+
 ## Build
 
 To build a `k6` binary with this extension, first ensure you have the prerequisites:
 
-- [Go toolchain](https://go101.org/article/go-toolchain.html)
-- Git
+* [Go toolchain](https://go101.org/article/go-toolchain.html)
+* Git
 
 Then:
 
