@@ -174,11 +174,7 @@ nebula-console -addr 192.168.8.61 -port 9669 -u root -p nebula -f schema.ngql
 ../k6 run nebula-test-insert.js -vu 10 -d 30s 
 
 # by default, the batch size is 100, you can change it in `nebula-test-insert.js`
-
-export default function (data) {
-  // get csv data from csv file
-  let ngql = 'INSERT VERTEX Person(firstName, lastName, gender, birthday, creationDate, locationIP, browserUsed) VALUES ' 
-  let batches = []
-  let batchSize = 100
+sed -i 's/let batchSize.*/let batchSize = 300/g' nebula-test-insert.js
+../k6 run nebula-test-insert.js -vu 10 -d 30s 
 
 ```
