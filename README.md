@@ -28,7 +28,7 @@ Then:
 2. Build the binary:
 
   ```bash
-  xk6 build --with github.com/vesoft-inc/k6-plugin@latest
+  xk6 build --with github.com/vesoft-inc/k6-plugin@v0.4.1
   ```
 
 ## Example
@@ -43,12 +43,9 @@ var lantencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 // initial nebula connect pool
 // by default the channel buffer size is 20000, you can reset it with
-
-// var pool = nebulaPool.initWithSize("192.168.8.152:9669", 400, 4000);
-
+// var pool = nebulaPool.initWithSize("192.168.8.152:9669", {poolSize}, {bufferSize}); e.g.
+// var pool = nebulaPool.initWithSize("192.168.8.152:9669", 1000, 4000)
 var pool = nebulaPool.init("192.168.8.152:9669", 400);
-
-
 
 // initial session for every vu
 var session = pool.getSession("root", "nebula")
@@ -86,6 +83,8 @@ export function teardown() {
 ## Result
 
 ```bash
+# -u means how many virtual users, i.e the concurrent users
+# -d means the duration that test running, e.g. `3s` means 3 seconds, `5m` means 5 minutes.
 >./k6 run nebula-test.js -u 3 -d 3s                                                      
 
           /\      |‾‾| /‾‾/   /‾‾/
@@ -184,3 +183,38 @@ sed -i 's/let batchSize.*/let batchSize = 300/g' nebula-test-insert.js
 ../k6 run nebula-test-insert.js -vu 10 -d 30s 
 
 ```
+
+## Test stages
+
+It can specify the target number of VUs by k6 stages in options. e.g.
+
+```js
+import nebulaPool from 'k6/x/nebulagraph';
+import { check } from 'k6';
+import { Trend } from 'k6/metrics';
+import { sleep } from 'k6';
+
+export let options = {
+  stages: [
+    { duration: '3m', target: 10 },
+    { duration: '5m', target: 10 },
+    { duration: '10m', target: 35 },
+    { duration: '3m', target: 0 },
+  ],
+};
+
+var lantencyTrend = new Trend('latency');
+var responseTrend = new Trend('responseTime');
+
+```
+
+The options means ramping up from 1 to 10 vus in 3 minutes, then runnign test with 10 vus in 5 minutes.
+
+And then ramping up from 10 vus to 35 vus in 10 minutes.
+
+Then ramping down from 35 vu3 to 0 in 3 minutes.
+
+
+It is much useful when we test multiple scenarios.
+
+please refer to [k6 options](https://k6.io/docs/using-k6/options/)
