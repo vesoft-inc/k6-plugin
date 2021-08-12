@@ -209,8 +209,11 @@ var responseTrend = new Trend('responseTime');
 ```
 
 The options means ramping up from 1 to 10 vus in 3 minutes, then runnign test with 10 vus in 5 minutes.
+
 And then ramping up from 10 vus to 35 vus in 10 minutes.
+
 Then ramping down from 35 vu3 to 0 in 3 minutes.
+
 
 It is much useful when we test multiple scenarios.
 
