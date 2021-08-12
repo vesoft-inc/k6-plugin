@@ -28,7 +28,7 @@ Then:
 2. Build the binary:
 
   ```bash
-  xk6 build --with github.com/HarrisChu/xk6-nebula@latest
+  xk6 build --with github.com/vesoft-inc/k6-plugin@latest
   ```
 
 ## Example

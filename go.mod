@@ -1,4 +1,4 @@
-module github.com/HarrisChu/xk6-nebula
+module github.com/vesoft-inc/k6-plugin
 
 go 1.16
 
