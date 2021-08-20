@@ -22,7 +22,7 @@ Then:
 1. Download `xk6`:
 
   ```bash
-  go install github.com/k6io/xk6/cmd/xk6@latest
+  go install github.com/k6io/xk6/cmd/xk6@v0.4.1
   ```
 
 2. Build the binary:
