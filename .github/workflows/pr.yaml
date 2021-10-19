@@ -23,5 +23,5 @@ jobs:
         env:
           CGO_ENABLED: 0
         run: |
-          make build-all
+          make build-dev
           ls -lh k6*
