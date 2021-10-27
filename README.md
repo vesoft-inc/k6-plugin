@@ -128,6 +128,19 @@ INFO[0004] 2021/07/07 16:50:29 [INFO] finish init the pool
      vus_max..............: 3       min=3        max=3
 ```
 
+* `checks`, one check per iteration, verify `isSucceed` by default.
+* `data_received` and `data_sent`, used by HTTP requests, useless for nebula.
+* `iteration_duration`, time consuming for every iteration.
+* `latency`, time consuming in nebula server.
+* `responseTime`, time consuming in client.
+* `vus`, concurrent virtual users.
+
+In general
+
+iteration_duration = responseTime + (time consuming for read data from csv)
+
+responseTime = latency + (time consuming for network) + (client decode)
+
 The `output.csv` saves data as below:
 
 ```bash
