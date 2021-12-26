@@ -15,7 +15,7 @@ type Data []string
 type Output struct {
 	TimeStamp    int64
 	NGQL         string
-	Latency      int32
+	Latency      int64
 	ResponseTime int32
 	IsSucceed    bool
 	Rows         int32
