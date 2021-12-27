@@ -8,7 +8,7 @@ VERSION ?= v0.0.8
 
 build: 
 	go install github.com/k6io/xk6/cmd/xk6@v0.4.1
-	$(GOPATH)/bin/xk6 build --with github.com/vesoft-inc/k6-plugin@latest; 
+	$(GOPATH)/bin/xk6 build --with github.com/vesoft-inc/k6-plugin@$(VERSION); 
 
 build-all: build-arm-v7
 

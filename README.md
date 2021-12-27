@@ -10,6 +10,15 @@ Used to test [Nebula-Graph](https://github.com/vesoft-inc/nebula-graph).
 * xk6 v0.4.1
 * Golang 1.16+
 
+## Version match
+
+There are the version correspondence between k6-plugin and Nebula:
+
+| k6-plugin Version | Nebula Version |
+|:-----------------:|:--------------:|
+|      v0.0.8       |  2.5.0, 2.5.1, 2.6.0, 2.6.1  |
+|     master        |     nightly    |
+
 ## Build
 
 To build a `k6` binary with this extension, first ensure you have the prerequisites:
@@ -27,9 +36,13 @@ Then:
 
 2. Build the binary:
 
-  ```bash
-  xk6 build --with github.com/vesoft-inc/k6-plugin@v0.4.1
-  ```
+```bash
+xk6 build --with github.com/vesoft-inc/k6-plugin@{version}
+# e.g. build v0.0.8
+xk6 build --with github.com/vesoft-inc/k6-plugin@v0.0.8
+# e.g. build master
+xk6 build --with github.com/vesoft-inc/k6-plugin@master
+```
 
 ## Example
 
@@ -226,7 +239,6 @@ The options means ramping up from 1 to 10 vus in 3 minutes, then runnign test wi
 And then ramping up from 10 vus to 35 vus in 10 minutes.
 
 Then ramping down from 35 vu3 to 0 in 3 minutes.
-
 
 It is much useful when we test multiple scenarios.
 
