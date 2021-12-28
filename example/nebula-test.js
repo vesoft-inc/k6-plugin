@@ -10,13 +10,6 @@ var pool = nebulaPool.init("192.168.8.152:9669", 400);
 // initial session for every vu
 var session = pool.getSession("root", "nebula")
 session.execute("USE ldbc")
-// export let options = {
-// 	stages: [
-// 		{ duration: '2s', target: 20 },
-// 		{ duration: '2m', target: 20 },
-// 		{ duration: '1m', target: 0 },
-// 	],
-// };
 
 export function setup() {
 	// config csv file
