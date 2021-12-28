@@ -6,10 +6,18 @@ import { sleep } from 'k6';
 var lantencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 // initial nebula connect pool
-var pool = nebulaPool.init("192.168.8.152:9669", 400);
+nebulaPool.newSSLConfig("cert/test.ca.pem", "cert/test.derive.crt", "cert/test.derive.key")
+var pool = nebulaPool.init("192.168.15.7:10004", 400);
 // initial session for every vu
 var session = pool.getSession("root", "nebula")
 session.execute("USE ldbc")
+export let options = {
+	stages: [
+		{ duration: '2s', target: 20 },
+		{ duration: '2m', target: 20 },
+		{ duration: '1m', target: 0 },
+	],
+};
 
 export function setup() {
 	// config csv file
@@ -37,5 +45,3 @@ export default function (data) {
 export function teardown() {
 	pool.close()
 }
-
-
