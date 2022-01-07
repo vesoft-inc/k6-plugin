@@ -1,28 +1,30 @@
 package nebulagraph
 
 import (
-	"crypto/tls"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	nebula "github.com/vesoft-inc/nebula-go/v2"
+	nebula "github.com/vesoft-inc/nebula-go"
+	graph "github.com/vesoft-inc/nebula-go/nebula/graph"
 )
 
 type (
+	HostAddress struct {
+		Host string
+		Port int
+	}
 	// NebulaPool nebula connection pool
 	NebulaPool struct {
-		HostList          []nebula.HostAddress
-		Pool              *nebula.ConnectionPool
-		Log               nebula.Logger
+		Host              *HostAddress
 		DataChs           []chan Data
 		OutoptCh          chan []string
 		Version           string
 		csvStrategy       csvReaderStrategy
 		initialized       bool
-		sessions          []*nebula.Session
+		sessions          []*nebula.GraphClient
 		channelBufferSize int
 		sslconfig         *sslConfig
 		mutex             sync.Mutex
@@ -30,14 +32,14 @@ type (
 
 	// NebulaSession a wrapper for nebula session, could read data from DataCh
 	NebulaSession struct {
-		Session *nebula.Session
+		Session *nebula.GraphClient
 		Pool    *NebulaPool
 		DataCh  chan Data
 	}
 
 	// Response a wrapper for nebula resultset
 	Response struct {
-		*nebula.ResultSet
+		ResultSet    *graph.ExecutionResponse
 		ResponseTime int32
 	}
 
@@ -48,9 +50,6 @@ type (
 		certPath       string
 		privateKeyPath string
 	}
-
-	// Data data in csv file
-	Data []string
 
 	output struct {
 		timeStamp    int64
@@ -95,7 +94,6 @@ var outputHeader []string = []string{
 // New for k6 initialization.
 func New() *NebulaPool {
 	return &NebulaPool{
-		Log:         nebula.DefaultLogger{},
 		initialized: false,
 		Version:     version,
 	}
@@ -119,79 +117,33 @@ func (np *NebulaPool) Init(address string, concurrent int) (*NebulaPool, error) 
 func (np *NebulaPool) InitWithSize(address string, concurrent int, size int) (*NebulaPool, error) {
 	np.mutex.Lock()
 	defer np.mutex.Unlock()
-	np.Log.Info("begin init the nebula pool")
 	np.initialized = true
-	var (
-		sslConfig *tls.Config
-		err       error
-		pool      *nebula.ConnectionPool
-	)
+	var err error
 
-	if np.sslconfig != nil {
-		sslConfig, err = nebula.GetDefaultSSLConfig(
-			np.sslconfig.rootCAPath,
-			np.sslconfig.certPath,
-			np.sslconfig.privateKeyPath,
-		)
-		if err != nil {
-			return nil, err
-		}
-		// skip insecure verification for stress testing.
-		sslConfig.InsecureSkipVerify = true
-	}
 	err = np.initAndVerifyPool(address, concurrent, size)
 	if err != nil {
 		return nil, err
 	}
-	conf := np.getDefaultConf(concurrent)
-	if sslConfig != nil {
-		pool, err = nebula.NewSslConnectionPool(np.HostList, *conf, sslConfig, np.Log)
-
-	} else {
-		pool, err = nebula.NewConnectionPool(np.HostList, *conf, np.Log)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	np.Pool = pool
-	np.Log.Info("finish init the pool")
 	np.initialized = true
 	return np, nil
 }
 
 func (np *NebulaPool) initAndVerifyPool(address string, concurrent int, size int) error {
-
-	addrs := strings.Split(address, ",")
-	var hosts []nebula.HostAddress
-	for _, addr := range addrs {
-		hostPort := strings.Split(addr, ":")
-		if len(hostPort) != 2 {
-			return fmt.Errorf("Invalid address: %s", addr)
-		}
-		port, err := strconv.Atoi(hostPort[1])
-		if err != nil {
-			return err
-		}
-		host := hostPort[0]
-		hostAddr := nebula.HostAddress{Host: host, Port: port}
-		hosts = append(hosts, hostAddr)
-		np.HostList = hosts
+	hostPort := strings.Split(address, ":")
+	if len(hostPort) != 2 {
+		return fmt.Errorf("Invalid address: %s", address)
 	}
-	np.sessions = make([]*nebula.Session, concurrent)
+	port, err := strconv.Atoi(hostPort[1])
+	if err != nil {
+		return err
+	}
+	host := hostPort[0]
+	hostAddr := &HostAddress{Host: host, Port: port}
+	np.Host = hostAddr
+	np.sessions = make([]*nebula.GraphClient, concurrent)
 	np.channelBufferSize = size
 	np.OutoptCh = make(chan []string, np.channelBufferSize)
 	return nil
-}
-
-func (np *NebulaPool) getDefaultConf(concurrent int) *nebula.PoolConfig {
-	conf := nebula.PoolConfig{
-		TimeOut:         0,
-		IdleTime:        0,
-		MaxConnPoolSize: concurrent,
-		MinConnPoolSize: 1,
-	}
-	return &conf
 }
 
 // ConfigCsvStrategy set csv reader strategy
@@ -226,10 +178,9 @@ func (np *NebulaPool) Close() error {
 	if !np.initialized {
 		return nil
 	}
-	np.Log.Info("begin close the nebula pool")
 	for _, s := range np.sessions {
 		if s != nil {
-			s.Release()
+			s.Disconnect()
 		}
 	}
 	np.initialized = false
@@ -238,14 +189,19 @@ func (np *NebulaPool) Close() error {
 
 // GetSession get the session from pool
 func (np *NebulaPool) GetSession(user, password string) (*NebulaSession, error) {
-	session, err := np.Pool.GetSession(user, password)
+	addr := fmt.Sprintf("%s:%d", np.Host.Host, np.Host.Port)
+	client, err := nebula.NewClient(addr)
 	if err != nil {
 		return nil, err
 	}
+	if err = client.Connect(user, password); err != nil {
+		return nil, err
+	}
+
 	np.mutex.Lock()
 	defer np.mutex.Unlock()
-	np.sessions = append(np.sessions, session)
-	s := &NebulaSession{Session: session, Pool: np}
+	np.sessions = append(np.sessions, client)
+	s := &NebulaSession{Session: client, Pool: np}
 	s.prepareCsvReader()
 
 	return s, nil
@@ -292,10 +248,10 @@ func (s *NebulaSession) Execute(stmt string) (*Response, error) {
 		o := &output{
 			timeStamp:    start.Unix(),
 			nGQL:         stmt,
-			latency:      rs.GetLatency(),
+			latency:      int64(rs.GetLatencyInUs()),
 			responseTime: responseTime,
-			isSucceed:    rs.IsSucceed(),
-			rows:         int32(rs.GetRowSize()),
+			isSucceed:    rs.GetErrorCode() == graph.ErrorCode_SUCCEEDED,
+			rows:         int32(len(rs.GetRows())),
 			errorMsg:     rs.GetErrorMsg(),
 		}
 		s.Pool.OutoptCh <- formatOutput(o)
@@ -308,4 +264,12 @@ func (s *NebulaSession) Execute(stmt string) (*Response, error) {
 // GetResponseTime GetResponseTime
 func (r *Response) GetResponseTime() int32 {
 	return r.ResponseTime
+}
+
+func (r *Response) IsSucceed() bool{
+	return r.ResultSet.GetErrorCode() == graph.ErrorCode_SUCCEEDED
+}
+
+func (r *Response) GetLatency() int32{
+	return r.ResultSet.GetLatencyInUs()
 }

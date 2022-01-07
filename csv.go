@@ -6,6 +6,9 @@ import (
 	"os"
 )
 
+// Data data in csv file
+type Data []string
+
 type CSVReader struct {
 	Path       string
 	Delimiter  string
