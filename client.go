@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	nebula "github.com/vesoft-inc/nebula-go/v2"
+	nebula "github.com/vesoft-inc/nebula-go/v3"
 )
 
 type (
@@ -119,8 +119,11 @@ func (np *NebulaPool) Init(address string, concurrent int) (*NebulaPool, error) 
 func (np *NebulaPool) InitWithSize(address string, concurrent int, size int) (*NebulaPool, error) {
 	np.mutex.Lock()
 	defer np.mutex.Unlock()
+	// k6 run in concurrent thread.
+	if np.initialized {
+		return np, nil
+	}
 	np.Log.Info("begin init the nebula pool")
-	np.initialized = true
 	var (
 		sslConfig *tls.Config
 		err       error
