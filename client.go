@@ -19,7 +19,6 @@ type (
 		Log               nebula.Logger
 		DataChs           []chan Data
 		OutoptCh          chan []string
-		Version           string
 		csvStrategy       csvReaderStrategy
 		initialized       bool
 		sessions          []*nebula.Session
@@ -97,7 +96,6 @@ func New() *NebulaPool {
 	return &NebulaPool{
 		Log:         nebula.DefaultLogger{},
 		initialized: false,
-		Version:     version,
 	}
 }
 
