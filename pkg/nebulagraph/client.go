@@ -102,12 +102,12 @@ func NewNebulaGraph() *GraphPool {
 	}
 }
 
-// Init init nebula pool with address and concurrent, by default the buffersize is 20000
+// Init initializes nebula pool with address and concurrent, by default the buffersize is 20000
 func (gp *GraphPool) Init(address string, concurrent int) (common.IGraphClientPool, error) {
 	return gp.InitWithSize(address, concurrent, 20000)
 }
 
-// InitWithSize init nebula pool with channel buffer size
+// InitWithSize initializes nebula pool with channel buffer size
 func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) (common.IGraphClientPool, error) {
 	gp.mutex.Lock()
 	defer gp.mutex.Unlock()
@@ -143,12 +143,12 @@ func (gp *GraphPool) initAndVerifyPool(address string, concurrent int, chanSize 
 	return nil
 }
 
-// ConfigCsvStrategy set csv reader strategy
+// ConfigCsvStrategy sets csv reader strategy
 func (gp *GraphPool) ConfigCsvStrategy(strategy int) {
 	gp.csvStrategy = csvReaderStrategy(strategy)
 }
 
-// ConfigCSV config the csv file to be read
+// ConfigCSV makes the read csv file configuration
 func (gp *GraphPool) ConfigCSV(path, delimiter string, withHeader bool) error {
 	for _, dataCh := range gp.DataChs {
 		reader := common.NewCsvReader(path, delimiter, withHeader, dataCh)
@@ -159,7 +159,7 @@ func (gp *GraphPool) ConfigCSV(path, delimiter string, withHeader bool) error {
 	return nil
 }
 
-// ConfigOutput config the output file, would write the execution outputs
+// ConfigOutput makes the output file configuration, would write the execution outputs
 func (gp *GraphPool) ConfigOutput(path string) error {
 	writer := common.NewCsvWriter(path, ",", outputHeader, gp.OutoptCh)
 	if err := writer.WriteForever(); err != nil {
@@ -168,7 +168,7 @@ func (gp *GraphPool) ConfigOutput(path string) error {
 	return nil
 }
 
-// Close close the nebula pool
+// Close closes the nebula pool
 func (gp *GraphPool) Close() error {
 	gp.mutex.Lock()
 	defer gp.mutex.Unlock()
@@ -185,7 +185,7 @@ func (gp *GraphPool) Close() error {
 	return nil
 }
 
-// GetSession get the session from pool
+// GetSession gets the session from pool
 func (gp *GraphPool) GetSession(username, password string) (common.IGraphClient, error) {
 	gp.mutex.Lock()
 	defer gp.mutex.Unlock()
@@ -248,7 +248,7 @@ func (gc *GraphClient) GetData() (common.Data, error) {
 	return nil, fmt.Errorf("no Data at all")
 }
 
-// Execute execute nebula query
+// Execute executes nebula query
 func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 	start := time.Now()
 	resp, err := gc.Client.Execute([]byte(stmt))
