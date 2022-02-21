@@ -1,4 +1,4 @@
-package nebulagraph
+package common
 
 import (
 	"encoding/csv"
@@ -6,19 +6,21 @@ import (
 	"os"
 )
 
-type CSVReader struct {
-	Path       string
-	Delimiter  string
-	WithHeader bool
-	DataCh     chan<- Data
-}
+type (
+	CSVReader struct {
+		Path       string
+		Delimiter  string
+		WithHeader bool
+		DataCh     chan<- Data
+	}
 
-type CSVWriter struct {
-	Path      string
-	Header    []string
-	Delimiter string
-	DataCh    <-chan []string
-}
+	CSVWriter struct {
+		Path      string
+		Header    []string
+		Delimiter string
+		DataCh    <-chan []string
+	}
+)
 
 func NewCsvReader(path, delimiter string, withHeader bool, dataCh chan<- Data) *CSVReader {
 	return &CSVReader{
