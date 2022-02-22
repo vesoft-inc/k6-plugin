@@ -1,0 +1,1 @@
+package k6plugin
