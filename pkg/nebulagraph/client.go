@@ -192,6 +192,7 @@ func (gp *GraphPool) GetSession(username, password string) (common.IGraphClient,
 	// balancer, ccore just use the first endpoint
 	index := len(gp.clients) % len(gp.hosts)
 	client, err := gp.clientGetter(gp.hosts[index], username, password)
+
 	if gp.Version == "" {
 		gp.Version = string(client.Version())
 	}
@@ -267,6 +268,8 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 		rows = 0
 		latency = 0
 	} else {
+		// no err, so the error code is ErrorCode_SUCCEEDED
+		codeErr, _ = nerrors.AsCodeError(nerrors.NewCodeError(nerrors.ErrorCode_SUCCEEDED, ""))
 		rs, _ = wrapper.GenResultSet(resp, gc.Client.Factory(), types.TimezoneInfo{})
 		rows = int32(rs.GetRowSize())
 		latency = resp.GetLatencyInUs()

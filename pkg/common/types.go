@@ -19,7 +19,7 @@ type (
 	IGraphClient interface {
 		IClient
 		GetData() (Data, error)
-		Execute(stat string) (IGraphResponse, error)
+		Execute(stmt string) (IGraphResponse, error)
 	}
 
 	// IGraphResponse graph response, just support 3 functions to user.
