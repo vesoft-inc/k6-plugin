@@ -27,6 +27,7 @@ type (
 		IsSucceed() bool
 		GetLatency() int64
 		GetResponseTime() int32
+		GetRowsCount() int32
 	}
 
 	// IGraphClientPool graph client pool.
