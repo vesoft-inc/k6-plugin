@@ -314,7 +314,7 @@ func (r *Response) GetLatency() int64 {
 	return 0
 }
 
-// GetRowsCount GetRowsCount
-func (r *Response) GetRowsCount() int32 {
-	return r.GetRowsCount()
+// GetRowSize GetRowSize
+func (r *Response) GetRowSize() int32 {
+	return int32(r.ResultSet.GetRowSize())
 }
