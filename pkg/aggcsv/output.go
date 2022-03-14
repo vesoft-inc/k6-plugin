@@ -134,7 +134,7 @@ func (o *Output) aggregateAndFlush() {
 	}
 
 	line := fmt.Sprintf("%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d\n",
-		time.Now().UnixMilli(), vus, requestCount, errorCount,
+		time.Now().UnixNano()/int64(time.Millisecond), vus, requestCount, errorCount,
 		latencyAvg, latencyP90, latencyP95, latencyP99,
 		rtAvg, rtP90, rtP95, rtP99,
 		rowSize/requestCount)
