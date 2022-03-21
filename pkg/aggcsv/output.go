@@ -133,11 +133,16 @@ func (o *Output) aggregateAndFlush() {
 		rtP99 = rts[int(rtLen*0.99)]
 	}
 
+	var rowSizePerReq int64 = 0
+	if requestCount > 0 {
+		rowSizePerReq = rowSize / requestCount
+	}
+
 	line := fmt.Sprintf("%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d\n",
 		time.Now().UnixNano()/int64(time.Millisecond), vus, requestCount, errorCount,
 		latencyAvg, latencyP90, latencyP95, latencyP99,
 		rtAvg, rtP90, rtP95, rtP99,
-		rowSize/requestCount)
+		rowSizePerReq)
 	o.outputFile.Write([]byte(line))
 }
 
