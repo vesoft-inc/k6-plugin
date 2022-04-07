@@ -277,7 +277,7 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 
 	responseTime := int32(time.Since(start) / 1000)
 	// output
-	if gc.Pool.OutoptCh != nil && len(gc.Pool.OutoptCh) != cap(gc.Pool.OutoptCh) {
+	if gc.Pool.OutoptCh != nil {
 		o := &output{
 			timeStamp:    start.Unix(),
 			nGQL:         stmt,
@@ -287,7 +287,11 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 			rows:         rows,
 			errorMsg:     codeErr.GetErrorMsg(),
 		}
-		gc.Pool.OutoptCh <- formatOutput(o)
+		select {
+		case gc.Pool.OutoptCh <- formatOutput(o):
+		// abandon if the output chan is full.
+		default:
+		}
 
 	}
 	return &Response{ResultSet: rs, ResponseTime: responseTime, codeErr: codeErr}, nil
