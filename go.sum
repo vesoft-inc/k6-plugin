@@ -327,6 +327,8 @@ github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyC
 github.com/valyala/fasttemplate v0.0.0-20170224212429-dcecefd839c4/go.mod h1:50wTf68f99/Zt14pr046Tgt3Lp2vLyFZKzbFXTOabXw=
 github.com/vesoft-inc/nebula-http-gateway/ccore v0.0.0-20220215025312-993ec26095cb h1:cX6Ghc0soBHbpPUlFgUnX4saVa3cBJTL2+SwiRrZKu4=
 github.com/vesoft-inc/nebula-http-gateway/ccore v0.0.0-20220215025312-993ec26095cb/go.mod h1:sFEvE+cY4TgwqWx6H6msOqAUzRhsEHHKaaMgIZENHuQ=
+github.com/vesoft-inc/nebula-http-gateway/ccore v0.0.0-20220413113447-a3f4c56287d8 h1:iL92Uk6hAe4vUBK/L99wf5295HYOtnD4plctVA5xek0=
+github.com/vesoft-inc/nebula-http-gateway/ccore v0.0.0-20220413113447-a3f4c56287d8/go.mod h1:sFEvE+cY4TgwqWx6H6msOqAUzRhsEHHKaaMgIZENHuQ=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
