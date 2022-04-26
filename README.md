@@ -12,13 +12,7 @@ Used to test [Nebula-Graph](https://github.com/vesoft-inc/nebula-graph).
 
 ## Version match
 
-There are the version correspondence between k6-plugin and Nebula:
-
-| k6-plugin Version | Nebula Version |
-|:-----------------:|:--------------:|
-|      v0.0.8       |  2.5.0, 2.5.1, 2.6.0, 2.6.1  |
-|      v0.0.9       |  3.0.0         |
-|     master        |     nightly    |
+k6-plugin now support Nebula above v2.5.0.
 
 ## Build
 
