@@ -4,7 +4,7 @@ all: build
 pairs := darwin/amd64 linux/amd64 linux/arm64
 GOPATH ?= ~/go
 export GO111MODULE=on
-VERSION ?= v0.0.8
+VERSION ?= v1.0.0
 K6_VERSION ?= v0.33.0
 
 build: 
