@@ -57,6 +57,7 @@ type (
 		isSucceed    bool
 		rows         int32
 		errorMsg     string
+		firstRecord  string
 	}
 )
 
@@ -78,6 +79,7 @@ func formatOutput(o *output) []string {
 		strconv.Itoa(int(o.responseTime)),
 		strconv.FormatBool(o.isSucceed),
 		strconv.Itoa(int(o.rows)),
+		o.firstRecord,
 		o.errorMsg,
 	}
 }
@@ -89,6 +91,7 @@ var outputHeader []string = []string{
 	"responseTime",
 	"isSucceed",
 	"rows",
+	"firstRecord",
 	"errorMsg",
 }
 
@@ -278,6 +281,13 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 	responseTime := int32(time.Since(start) / 1000)
 	// output
 	if gc.Pool.OutoptCh != nil {
+		var fr []string
+		for _, r := range rs.GetRows() {
+			for _, c := range r.GetValues() {
+				fr = append(fr, ValueToString(c))
+			}
+			break
+		}
 		o := &output{
 			timeStamp:    start.Unix(),
 			nGQL:         stmt,
@@ -286,6 +296,7 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 			isSucceed:    codeErr.GetErrorCode() == nerrors.ErrorCode_SUCCEEDED,
 			rows:         rows,
 			errorMsg:     codeErr.GetErrorMsg(),
+			firstRecord:  strings.Join(fr, "|"),
 		}
 		select {
 		case gc.Pool.OutoptCh <- formatOutput(o):
