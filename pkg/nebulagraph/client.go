@@ -282,11 +282,13 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 	// output
 	if gc.Pool.OutoptCh != nil {
 		var fr []string
-		for _, r := range rs.GetRows() {
-			for _, c := range r.GetValues() {
-				fr = append(fr, ValueToString(c))
+		if rows != 0 {
+			for _, r := range rs.GetRows() {
+				for _, c := range r.GetValues() {
+					fr = append(fr, ValueToString(c))
+				}
+				break
 			}
-			break
 		}
 		o := &output{
 			timeStamp:    start.Unix(),
