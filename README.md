@@ -2,7 +2,7 @@
 
 This is a [k6](https://github.com/k6io/k6) extension using the [xk6](https://github.com/k6io/xk6) system.
 
-Used to test [Nebula-Graph](https://github.com/vesoft-inc/nebula).
+Used to test [NebulaGraph](https://github.com/vesoft-inc/nebula).
 
 ## Dependency
 
