@@ -2,7 +2,7 @@
 
 This is a [k6](https://github.com/k6io/k6) extension using the [xk6](https://github.com/k6io/xk6) system.
 
-Used to test [Nebula-Graph](https://github.com/vesoft-inc/nebula).
+Used to test [NebulaGraph](https://github.com/vesoft-inc/nebula).
 
 ## Dependency
 
@@ -12,7 +12,7 @@ Used to test [Nebula-Graph](https://github.com/vesoft-inc/nebula).
 
 ## Version match
 
-k6-plugin now support Nebula above v2.5.0.
+k6-plugin now support NebulaGraph above v2.5.0.
 
 ## Build
 
@@ -47,7 +47,7 @@ import { check } from 'k6';
 import { Trend } from 'k6/metrics';
 import { sleep } from 'k6';
 
-var lantencyTrend = new Trend('latency');
+var latencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 // initial nebula connect pool
 // by default the channel buffer size is 20000, you can reset it with
@@ -78,7 +78,7 @@ export default function (data) {
     "IsSucceed": (r) => r.isSucceed() === true
   });
   // add trend
-lantencyTrend.add(response.getLatency());
+latencyTrend.add(response.getLatency());
 responseTrend.add(response.getResponseTime());
 };
 
@@ -137,9 +137,9 @@ INFO[0004] 2021/07/07 16:50:29 [INFO] finish init the pool
 ```
 
 * `checks`, one check per iteration, verify `isSucceed` by default.
-* `data_received` and `data_sent`, used by HTTP requests, useless for nebula.
+* `data_received` and `data_sent`, used by HTTP requests, useless for NebulaGraph.
 * `iteration_duration`, time consuming for every iteration.
-* `latency`, time consuming in nebula server.
+* `latency`, time consuming in NebulaGraph server.
 * `responseTime`, time consuming in client.
 * `vus`, concurrent virtual users.
 
@@ -224,12 +224,12 @@ export let options = {
   ],
 };
 
-var lantencyTrend = new Trend('latency');
+var latencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 
 ```
 
-The options means ramping up from 1 to 10 vus in 3 minutes, then runnign test with 10 vus in 5 minutes.
+The options means ramping up from 1 to 10 vus in 3 minutes, then running test with 10 vus in 5 minutes.
 
 And then ramping up from 10 vus to 35 vus in 10 minutes.
 
