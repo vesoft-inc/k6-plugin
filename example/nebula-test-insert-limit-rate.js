@@ -3,13 +3,13 @@
 // 1. each second, 1000 iterations would be made.
 // 2. max concurrent vu is 300.
 // 3. last 30 seconds, so it would run 1000*30 = 30000 iterations.
-// 4. batchSize is 1, so it would insert one recond per iteration.
+// 4. batchSize is 1, so it would insert one record per iteration.
 import nebulaPool from 'k6/x/nebulagraph';
 import { check } from 'k6';
 import { Trend } from 'k6/metrics';
 import { sleep } from 'k6';
 
-var lantencyTrend = new Trend('latency');
+var latencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 // initial nebula connect pool
 var pool = nebulaPool.initWithSize("192.168.8.61:9669,192.168.8.62:9669,192.168.8.63:9669", 400, 4000);
@@ -66,7 +66,7 @@ export default function (data) {
 		"IsSucceed": (r) => r.isSucceed() === true
 	});
 	// add trend
-	lantencyTrend.add(response.getLatency());
+	latencyTrend.add(response.getLatency());
 	responseTrend.add(response.getResponseTime());
 
 };

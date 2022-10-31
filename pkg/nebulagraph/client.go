@@ -17,8 +17,8 @@ import (
 type (
 	// GraphPool nebula connection pool
 	GraphPool struct {
-		DataChs           []chan common.Data
-		OutoptCh          chan []string
+		DataCh            chan common.Data
+		OutputCh          chan []string
 		Version           string
 		csvStrategy       csvReaderStrategy
 		initialized       bool
@@ -40,7 +40,7 @@ type (
 		password string
 	}
 
-	// Response a wrapper for nebula resultset
+	// Response a wrapper for nebula resultSet
 	Response struct {
 		*wrapper.ResultSet
 		ResponseTime int32
@@ -65,9 +65,9 @@ var _ common.IGraphClient = &GraphClient{}
 var _ common.IGraphClientPool = &GraphPool{}
 
 const (
-	// AllInOne all the vus use the same DataCh
+	// AllInOne read csv sequentially
 	AllInOne csvReaderStrategy = iota
-	// Separate each vu has a seprate DataCh
+	// Separate read csv concurrently
 	Separate
 )
 
@@ -105,7 +105,7 @@ func NewNebulaGraph() *GraphPool {
 	}
 }
 
-// Init initializes nebula pool with address and concurrent, by default the buffersize is 20000
+// Init initializes nebula pool with address and concurrent, by default the bufferSize is 20000
 func (gp *GraphPool) Init(address string, concurrent int) (common.IGraphClientPool, error) {
 	return gp.InitWithSize(address, concurrent, 20000)
 }
@@ -123,7 +123,9 @@ func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) 
 	if err != nil {
 		return nil, err
 	}
+	gp.DataCh = make(chan common.Data, chanSize)
 	gp.initialized = true
+
 	return gp, nil
 }
 
@@ -142,7 +144,7 @@ func (gp *GraphPool) initAndVerifyPool(address string, concurrent int, chanSize 
 	}
 	gp.clients = make([]nebula.GraphClient, 0)
 	gp.channelBufferSize = chanSize
-	gp.OutoptCh = make(chan []string, gp.channelBufferSize)
+	gp.OutputCh = make(chan []string, gp.channelBufferSize)
 	return nil
 }
 
@@ -153,18 +155,31 @@ func (gp *GraphPool) ConfigCsvStrategy(strategy int) {
 
 // ConfigCSV makes the read csv file configuration
 func (gp *GraphPool) ConfigCSV(path, delimiter string, withHeader bool) error {
-	for _, dataCh := range gp.DataChs {
+	dataCh := gp.DataCh
+	if gp.csvStrategy == AllInOne {
 		reader := common.NewCsvReader(path, delimiter, withHeader, dataCh)
 		if err := reader.ReadForever(); err != nil {
 			return err
 		}
+	} else {
+		// read the csv concurrently
+		l := len(gp.clients)
+		for c := 0; c < l; c++ {
+			reader := common.NewCsvReader(path, delimiter, withHeader, dataCh)
+			reader.SetDivisor(l)
+			reader.SetRemainder(c)
+			if err := reader.ReadForever(); err != nil {
+				return err
+			}
+		}
 	}
+
 	return nil
 }
 
 // ConfigOutput makes the output file configuration, would write the execution outputs
 func (gp *GraphPool) ConfigOutput(path string) error {
-	writer := common.NewCsvWriter(path, ",", outputHeader, gp.OutoptCh)
+	writer := common.NewCsvWriter(path, ",", outputHeader, gp.OutputCh)
 	if err := writer.WriteForever(); err != nil {
 		return err
 	}
@@ -208,8 +223,7 @@ func (gp *GraphPool) GetSession(username, password string) (common.IGraphClient,
 	}
 
 	gp.clients = append(gp.clients, client)
-	s := &GraphClient{Client: client, Pool: gp}
-	s.prepareCsvReader()
+	s := &GraphClient{Client: client, Pool: gp, DataCh: gp.DataCh}
 
 	return s, nil
 }
@@ -223,23 +237,6 @@ func (gc *GraphClient) Auth() error {
 }
 func (gc *GraphClient) Close() error {
 	return gc.Client.Close()
-}
-
-func (gc *GraphClient) prepareCsvReader() error {
-	np := gc.Pool
-
-	if np.csvStrategy == AllInOne {
-		if len(np.DataChs) == 0 {
-			dataCh := make(chan common.Data, np.channelBufferSize)
-			np.DataChs = append(np.DataChs, dataCh)
-		}
-		gc.DataCh = np.DataChs[0]
-	} else {
-		dataCh := make(chan common.Data, np.channelBufferSize)
-		np.DataChs = append(np.DataChs, dataCh)
-		gc.DataCh = dataCh
-	}
-	return nil
 }
 
 // GetData get data from csv reader
@@ -280,7 +277,7 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 
 	responseTime := int32(time.Since(start) / 1000)
 	// output
-	if gc.Pool.OutoptCh != nil {
+	if gc.Pool.OutputCh != nil {
 		var fr []string
 		if rows != 0 {
 			for _, r := range rs.GetRows() {
@@ -301,7 +298,7 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 			firstRecord:  strings.Join(fr, "|"),
 		}
 		select {
-		case gc.Pool.OutoptCh <- formatOutput(o):
+		case gc.Pool.OutputCh <- formatOutput(o):
 		// abandon if the output chan is full.
 		default:
 		}
@@ -333,5 +330,8 @@ func (r *Response) GetLatency() int64 {
 
 // GetRowSize GetRowSize
 func (r *Response) GetRowSize() int32 {
-	return int32(r.ResultSet.GetRowSize())
+	if r.ResultSet != nil {
+		return int32(r.ResultSet.GetRowSize())
+	}
+	return 0
 }

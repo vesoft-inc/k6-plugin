@@ -3,7 +3,7 @@ import { check } from 'k6';
 import { Trend } from 'k6/metrics';
 import { sleep } from 'k6';
 
-var lantencyTrend = new Trend('latency');
+var latencyTrend = new Trend('latency');
 var responseTrend = new Trend('responseTime');
 // initial nebula connect pool
 var pool = nebulaPool.init("192.168.8.152:9669", 400);
@@ -29,7 +29,7 @@ export default function (data) {
 		"IsSucceed": (r) => r.isSucceed() === true
 	});
 	// add trend
-	lantencyTrend.add(response.getLatency());
+	latencyTrend.add(response.getLatency());
 	responseTrend.add(response.getResponseTime());
 
 };
