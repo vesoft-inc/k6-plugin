@@ -22,7 +22,7 @@ type (
 		Execute(stmt string) (IGraphResponse, error)
 	}
 
-	// IGraphResponse graph response, just support 3 functions to user.
+	// IGraphResponse graph response, just support some functions to user.
 	IGraphResponse interface {
 		IsSucceed() bool
 		GetLatency() int64
@@ -34,7 +34,7 @@ type (
 	IGraphClientPool interface {
 		IClientPool
 		GetSession(username, password string) (IGraphClient, error)
-		// Init initialize the poop with default channel buffersize
+		// Init initialize the poop with default channel bufferSize
 		Init(address string, concurrent int) (IGraphClientPool, error)
 		InitWithSize(address string, concurrent int, size int) (IGraphClientPool, error)
 		ConfigCSV(path, delimiter string, withHeader bool) error

@@ -11,6 +11,8 @@ type (
 		Path       string
 		Delimiter  string
 		WithHeader bool
+		divisor    int
+		remainder  int
 		DataCh     chan<- Data
 	}
 
@@ -29,7 +31,6 @@ func NewCsvReader(path, delimiter string, withHeader bool, dataCh chan<- Data) *
 		WithHeader: withHeader,
 		DataCh:     dataCh,
 	}
-
 }
 
 func NewCsvWriter(path, delimiter string, header []string, dataCh <-chan []string) *CSVWriter {
@@ -41,7 +42,20 @@ func NewCsvWriter(path, delimiter string, header []string, dataCh <-chan []strin
 	}
 }
 
+func (c *CSVReader) SetDivisor(divisor int) {
+	if divisor > 0 {
+		c.divisor = divisor
+	}
+}
+
+func (c *CSVReader) SetRemainder(remainder int) {
+	if remainder >= 0 {
+		c.remainder = remainder
+	}
+}
+
 func (c *CSVReader) ReadForever() error {
+	line := 0
 	file, err := os.Open(c.Path)
 	defer file.Close()
 	if err != nil {
@@ -67,11 +81,18 @@ func (c *CSVReader) ReadForever() error {
 		for {
 			row, err := reader.Read()
 			if err == io.EOF {
+				line = 0
 				file.Seek(offset, 0)
 				row, err = reader.Read()
 			}
 			if err != nil {
 				return
+			}
+			line++
+			if c.divisor > 0 && c.remainder >= 0 {
+				if line%c.divisor != c.remainder {
+					continue
+				}
 			}
 			c.DataCh <- row
 		}
