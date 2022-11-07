@@ -5,7 +5,13 @@ pairs := darwin/amd64 linux/amd64 linux/arm64
 GOPATH ?= ~/go
 export GO111MODULE=on
 VERSION ?= v1.0.1
-K6_VERSION ?= v0.33.0
+K6_VERSION ?= v0.40.0
+
+fmt:
+	find . -name '*.go' -exec gofmt -s -w {} +
+
+lint :
+	golangci-lint run --out-format=tab ./...
 
 build: 
 	go install github.com/k6io/xk6/cmd/xk6@v0.4.1

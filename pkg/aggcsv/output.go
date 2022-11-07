@@ -53,7 +53,10 @@ func (o *Output) Start() error {
 	if err != nil {
 		return err
 	}
-	o.outputFile.Write([]byte("#timestamp,vus,requestCount,errorCount,latencyAvg,latencyP90,latencyP95,latencyP99,responseTimeAvg,responseTimeP90,responseTimeP95,responseTimeP99,rowSizePerReq\n"))
+	_, err = o.outputFile.Write([]byte("#timestamp,vus,requestCount,errorCount,latencyAvg,latencyP90,latencyP95,latencyP99,responseTimeAvg,responseTimeP90,responseTimeP95,responseTimeP99,rowSizePerReq\n"))
+	if err != nil {
+		return err
+	}
 
 	pf, err := output.NewPeriodicFlusher(time.Duration(o.config.aggregationInterval)*time.Second, o.aggregateAndFlush)
 	if err != nil {
@@ -143,7 +146,7 @@ func (o *Output) aggregateAndFlush() {
 		latencyAvg, latencyP90, latencyP95, latencyP99,
 		rtAvg, rtP90, rtP95, rtP99,
 		rowSizePerReq)
-	o.outputFile.Write([]byte(line))
+	_, _ = o.outputFile.Write([]byte(line))
 }
 
 func average(xs []float64) float64 {

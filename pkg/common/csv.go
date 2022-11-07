@@ -11,9 +11,7 @@ type (
 		Path       string
 		Delimiter  string
 		WithHeader bool
-		divisor    int
-		remainder  int
-		DataCh     chan<- Data
+		limit      int
 	}
 
 	CSVWriter struct {
@@ -24,12 +22,12 @@ type (
 	}
 )
 
-func NewCsvReader(path, delimiter string, withHeader bool, dataCh chan<- Data) *CSVReader {
+func NewCsvReader(path, delimiter string, withHeader bool, limit int) *CSVReader {
 	return &CSVReader{
 		Path:       path,
 		Delimiter:  delimiter,
 		WithHeader: withHeader,
-		DataCh:     dataCh,
+		limit:      limit,
 	}
 }
 
@@ -42,59 +40,50 @@ func NewCsvWriter(path, delimiter string, header []string, dataCh <-chan []strin
 	}
 }
 
-func (c *CSVReader) SetDivisor(divisor int) {
-	if divisor > 0 {
-		c.divisor = divisor
-	}
-}
-
-func (c *CSVReader) SetRemainder(remainder int) {
-	if remainder >= 0 {
-		c.remainder = remainder
-	}
-}
-
-func (c *CSVReader) ReadForever() error {
-	line := 0
+// ReadForever read the csv in slice first, and send to the data channel forever.
+func (c *CSVReader) ReadForever(dataCh chan<- Data) error {
+	lines := make([]Data, 0, c.limit)
 	file, err := os.Open(c.Path)
-	defer file.Close()
 	if err != nil {
 		return err
 	}
-	go func() {
-		file, err := os.Open(c.Path)
-		defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
+	reader := csv.NewReader(file)
+	comma := []rune(c.Delimiter)
+	if len(comma) > 0 {
+		reader.Comma = comma[0]
+	}
+	if c.WithHeader {
+		_, err := reader.Read()
 		if err != nil {
-			return
+			return err
 		}
-		reader := csv.NewReader(file)
-		comma := []rune(c.Delimiter)
-		if len(comma) > 0 {
-			reader.Comma = comma[0]
+	}
+	for {
+		row, err := reader.Read()
+		if err == io.EOF {
+			break
 		}
-		var offset int64 = 0
-		if c.WithHeader {
-			offset = 1
+		if err != nil {
+			return err
 		}
-		file.Seek(offset, 0)
 
+		lines = append(lines, row)
+		if len(lines) == c.limit {
+			break
+		}
+	}
+
+	go func() {
+		index := 0
 		for {
-			row, err := reader.Read()
-			if err == io.EOF {
-				line = 0
-				file.Seek(offset, 0)
-				row, err = reader.Read()
+			if index == len(lines) {
+				index = 0
 			}
-			if err != nil {
-				return
-			}
-			line++
-			if c.divisor > 0 && c.remainder >= 0 {
-				if line%c.divisor != c.remainder {
-					continue
-				}
-			}
-			c.DataCh <- row
+			dataCh <- lines[index]
+			index++
 		}
 	}()
 	return nil
@@ -103,7 +92,9 @@ func (c *CSVReader) ReadForever() error {
 
 func (c *CSVWriter) WriteForever() error {
 	file, err := os.OpenFile(c.Path, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 	if err != nil {
 		return err
 	}
@@ -112,11 +103,15 @@ func (c *CSVWriter) WriteForever() error {
 	if len(comma) > 0 {
 		w.Comma = comma[0]
 	}
-	w.Write(c.Header)
+	if err := w.Write(c.Header); err != nil {
+		return err
+	}
 	w.Flush()
 	go func() {
 		file, err := os.OpenFile(c.Path, os.O_APPEND|os.O_RDWR, 0644)
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 		if err != nil {
 			return
 		}
@@ -127,7 +122,7 @@ func (c *CSVWriter) WriteForever() error {
 		}
 
 		for {
-			w.Write(<-c.DataCh)
+			_ = w.Write(<-c.DataCh)
 			w.Flush()
 		}
 
