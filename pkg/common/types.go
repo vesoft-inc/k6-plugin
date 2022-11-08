@@ -37,11 +37,14 @@ type (
 		// Init initialize the poop with default channel bufferSize
 		Init(address string, concurrent int) (IGraphClientPool, error)
 		InitWithSize(address string, concurrent int, size int) (IGraphClientPool, error)
-		ConfigCSV(path, delimiter string, withHeader bool) error
+		ConfigCSV(path, delimiter string, withHeader bool, opts ...interface{}) error
 		ConfigOutput(path string) error
-		// ConfigCsvStrategy, csv strategy
-		// 0 means all vus have the same csv reader.
-		// 1 means each vu has a separate csv reader.
+
+		// Deprecated
 		ConfigCsvStrategy(strategy int)
+	}
+
+	ICsvReader interface {
+		ReadForever(dataCh chan<- Data) error
 	}
 )

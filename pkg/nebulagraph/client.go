@@ -27,6 +27,7 @@ type (
 		hosts             []string
 		mutex             sync.Mutex
 		clientGetter      graphClientGetter
+		csvReader         common.ICsvReader
 	}
 
 	graphClientGetter func(endpoint, username, password string) (nebula.GraphClient, error)
@@ -117,9 +118,8 @@ func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) 
 	if gp.initialized {
 		return gp, nil
 	}
-	var err error
 
-	err = gp.initAndVerifyPool(address, concurrent, chanSize)
+	err := gp.initAndVerifyPool(address, concurrent, chanSize)
 	if err != nil {
 		return nil, err
 	}
@@ -148,30 +148,29 @@ func (gp *GraphPool) initAndVerifyPool(address string, concurrent int, chanSize 
 	return nil
 }
 
-// ConfigCsvStrategy sets csv reader strategy
+// Deprecated ConfigCsvStrategy sets csv reader strategy
 func (gp *GraphPool) ConfigCsvStrategy(strategy int) {
-	gp.csvStrategy = csvReaderStrategy(strategy)
+	return
 }
 
 // ConfigCSV makes the read csv file configuration
-func (gp *GraphPool) ConfigCSV(path, delimiter string, withHeader bool) error {
-	dataCh := gp.DataCh
-	if gp.csvStrategy == AllInOne {
-		reader := common.NewCsvReader(path, delimiter, withHeader, dataCh)
-		if err := reader.ReadForever(); err != nil {
-			return err
+func (gp *GraphPool) ConfigCSV(path, delimiter string, withHeader bool, opts ...interface{}) error {
+	var (
+		limit int = 500 * 10000
+	)
+	if gp.csvReader != nil {
+		return nil
+	}
+	if len(opts) > 0 {
+		l, ok := opts[0].(int)
+		if ok {
+			limit = l
 		}
-	} else {
-		// read the csv concurrently
-		l := len(gp.clients)
-		for c := 0; c < l; c++ {
-			reader := common.NewCsvReader(path, delimiter, withHeader, dataCh)
-			reader.SetDivisor(l)
-			reader.SetRemainder(c)
-			if err := reader.ReadForever(); err != nil {
-				return err
-			}
-		}
+	}
+	gp.csvReader = common.NewCsvReader(path, delimiter, withHeader, limit)
+
+	if err := gp.csvReader.ReadForever(gp.DataCh); err != nil {
+		return err
 	}
 
 	return nil
@@ -280,11 +279,9 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 	if gc.Pool.OutputCh != nil {
 		var fr []string
 		if rows != 0 {
-			for _, r := range rs.GetRows() {
-				for _, c := range r.GetValues() {
-					fr = append(fr, ValueToString(c))
-				}
-				break
+			r := rs.GetRows()[0]
+			for _, c := range r.GetValues() {
+				fr = append(fr, ValueToString(c))
 			}
 		}
 		o := &output{
