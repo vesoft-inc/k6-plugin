@@ -31,3 +31,6 @@ jobs:
             k6-darwin-amd64
             k6-linux-amd64
             k6-linux-arm64
+            tools-darwin-amd64
+            tools-linux-amd64
+            tools-linux-arm64
