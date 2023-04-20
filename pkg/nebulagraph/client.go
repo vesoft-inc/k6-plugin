@@ -2,17 +2,17 @@ package nebulagraph
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/vesoft-inc/k6-plugin/pkg/common"
-	"github.com/vesoft-inc/nebula-http-gateway/ccore/nebula"
-	nerrors "github.com/vesoft-inc/nebula-http-gateway/ccore/nebula/errors"
-	"github.com/vesoft-inc/nebula-http-gateway/ccore/nebula/types"
-	"github.com/vesoft-inc/nebula-http-gateway/ccore/nebula/wrapper"
+	graph "github.com/vesoft-inc/nebula-go/v3"
 )
+
+const EnvRetryTimes = "NEBULA_RETRY_TIMES"
 
 type (
 	// GraphPool nebula connection pool
@@ -22,19 +22,18 @@ type (
 		Version           string
 		csvStrategy       csvReaderStrategy
 		initialized       bool
-		clients           []nebula.GraphClient
+		pool              *graph.ConnectionPool
+		clients           []common.IGraphClient
 		channelBufferSize int
 		hosts             []string
 		mutex             sync.Mutex
-		clientGetter      graphClientGetter
 		csvReader         common.ICsvReader
+		retryTimes        int
 	}
-
-	graphClientGetter func(endpoint, username, password string) (nebula.GraphClient, error)
 
 	// GraphClient a wrapper for nebula client, could read data from DataCh
 	GraphClient struct {
-		Client   nebula.GraphClient
+		Client   *graph.Session
 		Pool     *GraphPool
 		DataCh   chan common.Data
 		username string
@@ -43,9 +42,8 @@ type (
 
 	// Response a wrapper for nebula resultSet
 	Response struct {
-		*wrapper.ResultSet
+		*graph.ResultSet
 		ResponseTime int32
-		codeErr      nerrors.CodeError
 	}
 
 	csvReaderStrategy int
@@ -98,12 +96,7 @@ var outputHeader []string = []string{
 
 // NewNebulaGraph New for k6 initialization.
 func NewNebulaGraph() *GraphPool {
-	return &GraphPool{
-		clientGetter: func(endpoint string, username, password string) (nebula.GraphClient, error) {
-			// ccore just use the first host in list
-			return nebula.NewGraphClient([]string{endpoint}, username, password)
-		},
-	}
+	return &GraphPool{}
 }
 
 // Init initializes nebula pool with address and concurrent, by default the bufferSize is 20000
@@ -113,10 +106,18 @@ func (gp *GraphPool) Init(address string, concurrent int) (common.IGraphClientPo
 
 // InitWithSize initializes nebula pool with channel buffer size
 func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) (common.IGraphClientPool, error) {
+	var retryTimes int
 	gp.mutex.Lock()
 	defer gp.mutex.Unlock()
 	if gp.initialized {
 		return gp, nil
+	}
+	if os.Getenv(EnvRetryTimes) != "" {
+		retryTimes, _ = strconv.Atoi(os.Getenv(EnvRetryTimes))
+	}
+
+	if retryTimes == 0 {
+		retryTimes = 50
 	}
 
 	err := gp.initAndVerifyPool(address, concurrent, chanSize)
@@ -125,24 +126,37 @@ func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) 
 	}
 	gp.DataCh = make(chan common.Data, chanSize)
 	gp.initialized = true
+	gp.retryTimes = retryTimes
 
 	return gp, nil
 }
 
 func (gp *GraphPool) initAndVerifyPool(address string, concurrent int, chanSize int) error {
+	var hosts []graph.HostAddress
 	addrs := strings.Split(address, ",")
 	for _, addr := range addrs {
-		hostPort := strings.Split(addr, ":")
-		if len(hostPort) != 2 {
+		hostAndPort := strings.Split(addr, ":")
+		if len(hostAndPort) != 2 {
 			return fmt.Errorf("Invalid address: %s", addr)
 		}
-		_, err := strconv.Atoi(hostPort[1])
+		port, err := strconv.Atoi(hostAndPort[1])
 		if err != nil {
 			return err
 		}
-		gp.hosts = append(gp.hosts, addr)
+		hosts = append(hosts, graph.HostAddress{
+			Host: hostAndPort[0],
+			Port: port,
+		})
 	}
-	gp.clients = make([]nebula.GraphClient, 0)
+
+	gp.clients = make([]common.IGraphClient, 0, concurrent)
+	conf := graph.GetDefaultConf()
+	conf.MaxConnPoolSize = concurrent * 2
+	pool, err := graph.NewConnectionPool(hosts, conf, graph.DefaultLogger{})
+	if err != nil {
+		return err
+	}
+	gp.pool = pool
 	gp.channelBufferSize = chanSize
 	gp.OutputCh = make(chan []string, gp.channelBufferSize)
 	return nil
@@ -192,7 +206,6 @@ func (gp *GraphPool) Close() error {
 	if !gp.initialized {
 		return nil
 	}
-	// gp.Log.Println("begin close the nebula pool")
 	for _, s := range gp.clients {
 		if s != nil {
 			s.Close()
@@ -206,36 +219,23 @@ func (gp *GraphPool) Close() error {
 func (gp *GraphPool) GetSession(username, password string) (common.IGraphClient, error) {
 	gp.mutex.Lock()
 	defer gp.mutex.Unlock()
-	// balancer, ccore just use the first endpoint
-	index := len(gp.clients) % len(gp.hosts)
-	client, err := gp.clientGetter(gp.hosts[index], username, password)
-
-	if gp.Version == "" {
-		gp.Version = string(client.Version())
-	}
+	c, err := gp.pool.GetSession(username, password)
 	if err != nil {
 		return nil, err
 	}
-	err = client.Open()
-	if err != nil {
-		return nil, err
-	}
-
-	gp.clients = append(gp.clients, client)
-	s := &GraphClient{Client: client, Pool: gp, DataCh: gp.DataCh}
-
+	s := &GraphClient{Client: c, Pool: gp, DataCh: gp.DataCh}
+	gp.clients = append(gp.clients, s)
 	return s, nil
 }
 
 func (gc *GraphClient) Open() error {
-	return gc.Client.Open()
+	// nebula-go no need to open
+	return nil
 }
-func (gc *GraphClient) Auth() error {
-	_, err := gc.Client.Authenticate(gc.username, gc.password)
-	return err
-}
+
 func (gc *GraphClient) Close() error {
-	return gc.Client.Close()
+	gc.Client.Release()
+	return nil
 }
 
 // GetData get data from csv reader
@@ -248,40 +248,65 @@ func (gc *GraphClient) GetData() (common.Data, error) {
 	return nil, fmt.Errorf("no Data at all")
 }
 
+func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
+	// retry only when leader changed
+	// if other errors, e.g. SemanticError, would return directly
+	var (
+		resp *graph.ResultSet
+		err  error
+	)
+	for i := 0; i < gc.Pool.retryTimes; i++ {
+		resp, err = gc.Client.Execute(stmt)
+		if err != nil {
+			return nil, err
+		}
+		graphErr := resp.GetErrorCode()
+		if graphErr != graph.ErrorCode_SUCCEEDED {
+			if graphErr == graph.ErrorCode_E_EXECUTION_ERROR {
+				fmt.Printf("execute error: %s, code: %d, retry %d times\n", resp.GetErrorMsg(), graphErr, i+1)
+				<-time.After(100 * time.Millisecond)
+				continue
+			}
+			return resp, nil
+		}
+		return resp, nil
+	}
+	// still leader changed
+	fmt.Printf("retry %d times, but still leader changed, return directly\n", gc.Pool.retryTimes)
+	return resp, nil
+}
+
 // Execute executes nebula query
 func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 	start := time.Now()
-	resp, err := gc.Client.Execute([]byte(stmt))
 	var (
-		codeErr nerrors.CodeError
-		ok      bool
 		rows    int32
-		rs      *wrapper.ResultSet
 		latency int64
 	)
+	resp, err := gc.executeRetry(stmt)
 	if err != nil {
-		codeErr, ok = nerrors.AsCodeError(err)
-		if !ok {
-			return nil, err
-		}
-		rows = 0
-		latency = 0
-	} else {
-		// no err, so the error code is ErrorCode_SUCCEEDED
-		codeErr, _ = nerrors.AsCodeError(nerrors.NewCodeError(nerrors.ErrorCode_SUCCEEDED, ""))
-		rs, _ = wrapper.GenResultSet(resp, gc.Client.Factory(), types.TimezoneInfo{})
-		rows = int32(rs.GetRowSize())
-		latency = resp.GetLatencyInUs()
+		return nil, err
 	}
+
+	rows = int32(resp.GetRowSize())
+	latency = resp.GetLatency()
 
 	responseTime := int32(time.Since(start) / 1000)
 	// output
 	if gc.Pool.OutputCh != nil {
 		var fr []string
+		columns := resp.GetColSize()
 		if rows != 0 {
-			r := rs.GetRows()[0]
-			for _, c := range r.GetValues() {
-				fr = append(fr, ValueToString(c))
+			r, err := resp.GetRowValuesByIndex(0)
+			if err != nil {
+				return nil, err
+			}
+			for i := 0; i < columns; i++ {
+				v, err := r.GetValueByIndex(i)
+				if err != nil {
+					return nil, err
+				}
+				fr = append(fr, v.String())
 			}
 		}
 		o := &output{
@@ -289,9 +314,9 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 			nGQL:         stmt,
 			latency:      latency,
 			responseTime: responseTime,
-			isSucceed:    codeErr.GetErrorCode() == nerrors.ErrorCode_SUCCEEDED,
+			isSucceed:    resp.GetErrorCode() == graph.ErrorCode_SUCCEEDED,
 			rows:         rows,
-			errorMsg:     codeErr.GetErrorMsg(),
+			errorMsg:     resp.GetErrorMsg(),
 			firstRecord:  strings.Join(fr, "|"),
 		}
 		select {
@@ -301,7 +326,7 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 		}
 
 	}
-	return &Response{ResultSet: rs, ResponseTime: responseTime, codeErr: codeErr}, nil
+	return &Response{ResultSet: resp, ResponseTime: responseTime}, nil
 }
 
 // GetResponseTime GetResponseTime
@@ -311,7 +336,7 @@ func (r *Response) GetResponseTime() int32 {
 
 // IsSucceed IsSucceed
 func (r *Response) IsSucceed() bool {
-	if r.codeErr != nil && r.codeErr.GetErrorCode() != nerrors.ErrorCode_SUCCEEDED {
+	if r.ResultSet == nil || r.ResultSet.GetErrorCode() != graph.ErrorCode_SUCCEEDED {
 		return false
 	}
 	return true
