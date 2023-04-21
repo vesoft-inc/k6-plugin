@@ -4,7 +4,7 @@ all: build
 pairs := darwin/amd64 linux/amd64 linux/arm64
 GOPATH ?= ~/go
 export GO111MODULE=on
-VERSION ?= v1.0.1
+VERSION ?= v1.1.0
 K6_VERSION ?= v0.43.0
 
 fmt:
@@ -26,12 +26,12 @@ build-all: build-arm-v7
 		GOOS=$$os GOARCH=$$arch $(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@$(VERSION) ;\
 		mv k6 k6-$$os-$$arch; \
 	done
-	cd tools
+	cd tools ;\
 	for  pair in $(pairs);do echo $$pair; \
 		os=`echo $$pair | cut -d / -f 1 ` ;\
 		arch=`echo $$pair | cut -d / -f 2 ` ;\
 		GOOS=$$os GOARCH=$$arch go build ;\
-		mv tools tools-$$os-$$arch-; \
+		mv tools tools-$$os-$$arch; \
 	done
 
 build-arm-v7:
