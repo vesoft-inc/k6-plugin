@@ -117,7 +117,7 @@ func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) 
 	}
 
 	if retryTimes == 0 {
-		retryTimes = 50
+		retryTimes = 200
 	}
 
 	err := gp.initAndVerifyPool(address, concurrent, chanSize)
@@ -263,7 +263,6 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 		graphErr := resp.GetErrorCode()
 		if graphErr != graph.ErrorCode_SUCCEEDED {
 			if graphErr == graph.ErrorCode_E_EXECUTION_ERROR {
-				fmt.Printf("execute error: %s, code: %d, retry %d times\n", resp.GetErrorMsg(), graphErr, i+1)
 				<-time.After(100 * time.Millisecond)
 				continue
 			}
@@ -272,7 +271,7 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 		return resp, nil
 	}
 	// still leader changed
-	fmt.Printf("retry %d times, but still leader changed, return directly\n", gc.Pool.retryTimes)
+	fmt.Printf("retry %d times, but still error: %s, return directly\n", gc.Pool.retryTimes, resp.GetErrorMsg())
 	return resp, nil
 }
 
