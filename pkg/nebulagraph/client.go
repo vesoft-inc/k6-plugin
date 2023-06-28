@@ -13,6 +13,8 @@ import (
 )
 
 const EnvRetryTimes = "NEBULA_RETRY_TIMES"
+const EnvRetryIntervalUs = "NEBULA_RETRY_INTERVAL_US"
+const EnvRetryTimeoutUs = "NEBULA_RETRY_TIMEOUT_US"
 
 type (
 	// GraphPool nebula connection pool
@@ -29,6 +31,8 @@ type (
 		mutex             sync.Mutex
 		csvReader         common.ICsvReader
 		retryTimes        int
+		retryIntervalUs   int
+		retryTimeoutUs    int
 	}
 
 	// GraphClient a wrapper for nebula client, could read data from DataCh
@@ -106,7 +110,12 @@ func (gp *GraphPool) Init(address string, concurrent int) (common.IGraphClientPo
 
 // InitWithSize initializes nebula pool with channel buffer size
 func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) (common.IGraphClientPool, error) {
-	var retryTimes int
+	var (
+		retryTimes      int
+		retryIntervalUs int
+		retryTimeoutUs  int
+	)
+
 	gp.mutex.Lock()
 	defer gp.mutex.Unlock()
 	if gp.initialized {
@@ -115,9 +124,18 @@ func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) 
 	if os.Getenv(EnvRetryTimes) != "" {
 		retryTimes, _ = strconv.Atoi(os.Getenv(EnvRetryTimes))
 	}
+	if os.Getenv(EnvRetryIntervalUs) != "" {
+		retryIntervalUs, _ = strconv.Atoi(os.Getenv(EnvRetryIntervalUs))
+	}
+	if os.Getenv(EnvRetryTimeoutUs) != "" {
+		retryTimeoutUs, _ = strconv.Atoi(os.Getenv(EnvRetryTimeoutUs))
+	}
 
 	if retryTimes == 0 {
 		retryTimes = 200
+	}
+	if retryIntervalUs == 0 {
+		retryIntervalUs = 100 * 1e3
 	}
 
 	err := gp.initAndVerifyPool(address, concurrent, chanSize)
@@ -127,6 +145,8 @@ func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) 
 	gp.DataCh = make(chan common.Data, chanSize)
 	gp.initialized = true
 	gp.retryTimes = retryTimes
+	gp.retryIntervalUs = retryIntervalUs
+	gp.retryTimeoutUs = retryTimeoutUs
 
 	return gp, nil
 }
@@ -249,29 +269,31 @@ func (gc *GraphClient) GetData() (common.Data, error) {
 }
 
 func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
-	// retry only when leader changed
+	// retry only when execution error
 	// if other errors, e.g. SemanticError, would return directly
 	var (
 		resp *graph.ResultSet
 		err  error
 	)
+	start := time.Now()
 	for i := 0; i < gc.Pool.retryTimes; i++ {
+		if gc.Pool.retryTimeoutUs != 0 && time.Since(start).Microseconds() > int64(gc.Pool.retryTimeoutUs) {
+			return resp, nil
+		}
 		resp, err = gc.Client.Execute(stmt)
 		if err != nil {
 			return nil, err
 		}
 		graphErr := resp.GetErrorCode()
-		if graphErr != graph.ErrorCode_SUCCEEDED {
-			if graphErr == graph.ErrorCode_E_EXECUTION_ERROR {
-				<-time.After(100 * time.Millisecond)
-				continue
-			}
+		if graphErr == graph.ErrorCode_SUCCEEDED {
 			return resp, nil
 		}
-		return resp, nil
+		// only retry for execution error
+		if graphErr != graph.ErrorCode_E_EXECUTION_ERROR {
+			break
+		}
+		<-time.After(time.Duration(gc.Pool.retryIntervalUs) * time.Microsecond)
 	}
-	// still leader changed
-	fmt.Printf("retry %d times, but still error: %s, return directly\n", gc.Pool.retryTimes, resp.GetErrorMsg())
 	return resp, nil
 }
 
