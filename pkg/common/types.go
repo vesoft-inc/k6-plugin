@@ -42,6 +42,11 @@ type (
 
 		// Deprecated
 		ConfigCsvStrategy(strategy int)
+
+		// Enable Http2
+		EnableHttp2()
+		// Config LTS
+		SetSSLConfig(rootPemPath string, clientPemPath string, clientKeyPath string)
 	}
 
 	ICsvReader interface {
