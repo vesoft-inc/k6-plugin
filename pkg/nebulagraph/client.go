@@ -33,6 +33,14 @@ type (
 		retryTimes        int
 		retryIntervalUs   int
 		retryTimeoutUs    int
+		enableHttp2       bool
+		sslConfig         *sslConfig
+	}
+
+	sslConfig struct {
+		rootPemPath   string
+		clientPemPath string
+		clientKeyPath string
 	}
 
 	// GraphClient a wrapper for nebula client, could read data from DataCh
@@ -99,7 +107,7 @@ var outputHeader []string = []string{
 }
 
 // NewNebulaGraph New for k6 initialization.
-func NewNebulaGraph() *GraphPool {
+func NewNebulaGraph() common.IGraphClientPool {
 	return &GraphPool{}
 }
 
@@ -172,7 +180,25 @@ func (gp *GraphPool) initAndVerifyPool(address string, concurrent int, chanSize 
 	gp.clients = make([]common.IGraphClient, 0, concurrent)
 	conf := graph.GetDefaultConf()
 	conf.MaxConnPoolSize = concurrent * 2
-	pool, err := graph.NewConnectionPool(hosts, conf, graph.DefaultLogger{})
+	if gp.enableHttp2 {
+		conf.UseHTTP2 = true
+	}
+	var (
+		pool *graph.ConnectionPool
+		err  error
+	)
+	if gp.sslConfig != nil {
+		sc, err := graph.GetDefaultSSLConfig(
+			gp.sslConfig.rootPemPath,
+			gp.sslConfig.clientPemPath,
+			gp.sslConfig.clientKeyPath)
+		if err != nil {
+			return err
+		}
+		pool, err = graph.NewSslConnectionPool(hosts, conf, sc, graph.DefaultLogger{})
+	} else {
+		pool, err = graph.NewConnectionPool(hosts, conf, graph.DefaultLogger{})
+	}
 	if err != nil {
 		return err
 	}
@@ -246,6 +272,19 @@ func (gp *GraphPool) GetSession(username, password string) (common.IGraphClient,
 	s := &GraphClient{Client: c, Pool: gp, DataCh: gp.DataCh}
 	gp.clients = append(gp.clients, s)
 	return s, nil
+}
+
+func (gp *GraphPool) EnableHttp2() {
+	gp.enableHttp2 = true
+}
+
+func (gp *GraphPool) SetSSLConfig(rootPemPath string, clientPemPath string, clientKeyPath string) {
+	sslConfig := sslConfig{
+		rootPemPath:   rootPemPath,
+		clientPemPath: clientPemPath,
+		clientKeyPath: clientKeyPath,
+	}
+	gp.sslConfig = &sslConfig
 }
 
 func (gc *GraphClient) Open() error {
