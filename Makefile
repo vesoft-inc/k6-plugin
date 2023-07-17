@@ -4,7 +4,6 @@ all: build
 pairs := darwin/amd64 linux/amd64 linux/arm64
 GOPATH ?= ~/go
 export GO111MODULE=on
-VERSION ?= v1.1.0
 K6_VERSION ?= v0.43.0
 
 fmt:
@@ -15,7 +14,8 @@ lint :
 
 build: 
 	go install github.com/k6io/xk6/cmd/xk6@v0.4.1
-	$(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@$(VERSION); 
+	version=$(git describe --tags `git rev-list --tags --max-count=1`) \
+	$(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@$(version); 
 
 build-all: build-arm-v7
 
