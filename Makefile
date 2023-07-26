@@ -42,8 +42,10 @@ build-arm-v7:
 
 build-dev:
 	go install go.k6.io/xk6/cmd/xk6@${XK6_VERSION}
-	$(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@latest=${PWD}/../k6-plugin \
-		--replace github.com/vesoft-inc/nebula-go/v3=/home/Harris.chu/code/nebula-go; 	
+	# if replace nebula-go, need to change nebula-go path
+	# $(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@latest=${PWD}/../k6-plugin \
+	# 	--replace github.com/vesoft-inc/nebula-go/v3=/home/Harris.chu/code/nebula-go; 	
+	$(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@latest=${PWD}/../k6-plugin ;
 
 build-dev-all:
 	go install go.k6.io/xk6/cmd/xk6@${XK6_VERSION}
