@@ -329,20 +329,21 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 	)
 	start := time.Now()
 	for i := 0; i < gc.Pool.graphOption.RetryTimes+1; i++ {
-		if gc.Pool.graphOption.RetryIntervalUs != 0 &&
-			time.Since(start).Microseconds() > int64(gc.Pool.graphOption.RetryTimeoutUs) {
-			return resp, err
-		}
+
 		if gc.Client != nil {
 			resp, err = gc.Client.Execute(stmt)
 		} else {
 			resp, err = gc.Pool.sessPool.Execute(stmt)
 		}
-
+		if gc.Pool.graphOption.RetryIntervalUs != 0 &&
+			time.Since(start).Microseconds() > int64(gc.Pool.graphOption.RetryTimeoutUs) {
+			return resp, fmt.Errorf("retry timeout")
+		}
 		if err != nil {
 			fmt.Println("execute error: ", err)
 			continue
 		}
+
 		graphErr := resp.GetErrorCode()
 		if graphErr == graph.ErrorCode_SUCCEEDED {
 			return resp, nil
@@ -394,22 +395,24 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 		return result, nil
 	}
 
-	var fr []string
-	columns := resp.GetColSize()
-	if o.rows != 0 {
-		r, err := resp.GetRowValuesByIndex(0)
-		if err != nil {
-			return nil, err
-		}
-		for i := 0; i < columns; i++ {
-			v, err := r.GetValueByIndex(i)
+	if resp != nil {
+		var fr []string
+		columns := resp.GetColSize()
+		if o.rows != 0 {
+			r, err := resp.GetRowValuesByIndex(0)
 			if err != nil {
 				return nil, err
 			}
-			fr = append(fr, v.String())
+			for i := 0; i < columns; i++ {
+				v, err := r.GetValueByIndex(i)
+				if err != nil {
+					return nil, err
+				}
+				fr = append(fr, v.String())
+			}
 		}
+		o.firstRecord = strings.Join(fr, "|")
 	}
-	o.firstRecord = strings.Join(fr, "|")
 
 	select {
 	case gc.Pool.OutputCh <- formatOutput(o):

@@ -332,6 +332,8 @@ github.com/tidwall/pretty v1.2.0/go.mod h1:ITEVvHYasfjBbM0u2Pg8T2nJnzm8xPwvNhhso
 github.com/tidwall/pretty v1.2.1/go.mod h1:ITEVvHYasfjBbM0u2Pg8T2nJnzm8xPwvNhhsoaGGjNU=
 github.com/vesoft-inc/nebula-go/v3 v3.4.0-1.0.20230412100133-fae48de712b6 h1:FOhQdJQixo6hd++kKwHHi3QN7MuwesLFkRnenPM/u7E=
 github.com/vesoft-inc/nebula-go/v3 v3.4.0-1.0.20230412100133-fae48de712b6/go.mod h1:+sXv05jYQBARdTbTcIEsWVXCnF/6ttOlDK35xQ6m54s=
+github.com/vesoft-inc/nebula-go/v3 v3.5.0 h1:2ZSkoBxtIfs15AXJXqrAPDPd0Z9HrzKR7YKXPqlJcR0=
+github.com/vesoft-inc/nebula-go/v3 v3.5.0/go.mod h1:+sXv05jYQBARdTbTcIEsWVXCnF/6ttOlDK35xQ6m54s=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
