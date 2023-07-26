@@ -6,22 +6,20 @@ import { sleep } from 'k6';
 var latencyTrend = new Trend('latency', true);
 var responseTrend = new Trend('responseTime', true);
 var rowSize = new Trend('rowSize');
-// initial nebula connect pool
-var pool = nebulaPool.initWithSize("192.168.8.61:9669,192.168.8.62:9669,192.168.8.63:9669", 400, 4000);
 
-// set csv strategy, 1 means each vu has a separate csv reader.
-pool.configCsvStrategy(1)
+var graph_option = {
+	address: "192.168.8.6:10010",
+	space: "sf1",
+	csv_path: "person.csv",
+	csv_delimiter: "|",
+	csv_with_header: true,
+	output: "output.csv"
+};
 
+nebulaPool.setOption(graph_option);
+var pool = nebulaPool.init();
 // initial session for every vu
-var session = pool.getSession("root", "nebula")
-session.execute("USE ldbc")
-// export let options = {
-// 	stages: [
-// 		{ duration: '2s', target: 20 },
-// 		{ duration: '2m', target: 20 },
-// 		{ duration: '1m', target: 0 },
-// 	],
-// };
+var session = pool.getSession()
 
 String.prototype.format = function () {
   var formatted = this;
@@ -32,14 +30,6 @@ String.prototype.format = function () {
   })
   return formatted
 };
-
-export function setup() {
-  // config csv file
-  pool.configCSV("person.csv", "|", false)
-  // config output file, save every query information
-  pool.configOutput("output.csv")
-  sleep(1)
-}
 
 export default function (data) {
   // get csv data from csv file

@@ -1,8 +1,9 @@
 package nebulagraph
 
 import (
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,29 +20,22 @@ const EnvRetryTimeoutUs = "NEBULA_RETRY_TIMEOUT_US"
 type (
 	// GraphPool nebula connection pool
 	GraphPool struct {
-		DataCh            chan common.Data
-		OutputCh          chan []string
-		Version           string
-		csvStrategy       csvReaderStrategy
-		initialized       bool
-		pool              *graph.ConnectionPool
-		clients           []common.IGraphClient
-		channelBufferSize int
-		hosts             []string
-		mutex             sync.Mutex
-		csvReader         common.ICsvReader
-		retryTimes        int
-		retryIntervalUs   int
-		retryTimeoutUs    int
+		DataCh      chan common.Data
+		OutputCh    chan []string
+		initialized bool
+		mutex       sync.Mutex
+		csvReader   common.ICsvReader
+		connPool    *graph.ConnectionPool
+		sessPool    *graph.SessionPool
+		clients     []common.IGraphClient
+		graphOption *common.GraphOption
 	}
 
 	// GraphClient a wrapper for nebula client, could read data from DataCh
 	GraphClient struct {
-		Client   *graph.Session
-		Pool     *GraphPool
-		DataCh   chan common.Data
-		username string
-		password string
+		Client *graph.Session
+		Pool   *GraphPool
+		DataCh chan common.Data
 	}
 
 	// Response a wrapper for nebula resultSet
@@ -104,119 +98,145 @@ func NewNebulaGraph() *GraphPool {
 }
 
 // Init initializes nebula pool with address and concurrent, by default the bufferSize is 20000
-func (gp *GraphPool) Init(address string, concurrent int) (common.IGraphClientPool, error) {
-	return gp.InitWithSize(address, concurrent, 20000)
-}
-
-// InitWithSize initializes nebula pool with channel buffer size
-func (gp *GraphPool) InitWithSize(address string, concurrent int, chanSize int) (common.IGraphClientPool, error) {
+func (gp *GraphPool) Init() (common.IGraphClientPool, error) {
 	var (
-		retryTimes      int
-		retryIntervalUs int
-		retryTimeoutUs  int
+		err error
 	)
-
-	gp.mutex.Lock()
-	defer gp.mutex.Unlock()
 	if gp.initialized {
 		return gp, nil
 	}
-	if os.Getenv(EnvRetryTimes) != "" {
-		retryTimes, _ = strconv.Atoi(os.Getenv(EnvRetryTimes))
-	}
-	if os.Getenv(EnvRetryIntervalUs) != "" {
-		retryIntervalUs, _ = strconv.Atoi(os.Getenv(EnvRetryIntervalUs))
-	}
-	if os.Getenv(EnvRetryTimeoutUs) != "" {
-		retryTimeoutUs, _ = strconv.Atoi(os.Getenv(EnvRetryTimeoutUs))
-	}
 
-	if retryTimes == 0 {
-		retryTimes = 200
+	switch gp.graphOption.PoolPolicy {
+	case string(common.ConnectionPool):
+		err = gp.initConnectionPool()
+	case string(common.SessionPool):
+		err = gp.initSessionPool()
+	default:
+		return nil, fmt.Errorf("invalid pool policy: %s, need connection or session", gp.graphOption.PoolPolicy)
 	}
-	if retryIntervalUs == 0 {
-		retryIntervalUs = 100 * 1e3
-	}
-
-	err := gp.initAndVerifyPool(address, concurrent, chanSize)
 	if err != nil {
 		return nil, err
 	}
-	gp.DataCh = make(chan common.Data, chanSize)
 	gp.initialized = true
-	gp.retryTimes = retryTimes
-	gp.retryIntervalUs = retryIntervalUs
-	gp.retryTimeoutUs = retryTimeoutUs
-
+	if gp.graphOption.Output != "" {
+		channelBufferSize := gp.graphOption.OutputChannelSize
+		gp.OutputCh = make(chan []string, channelBufferSize)
+		writer := common.NewCsvWriter(gp.graphOption.Output, ",", outputHeader, gp.OutputCh)
+		if err := writer.WriteForever(); err != nil {
+			return nil, err
+		}
+	}
+	if gp.graphOption.CsvPath != "" {
+		gp.csvReader = common.NewCsvReader(
+			gp.graphOption.CsvPath,
+			gp.graphOption.CsvDelimiter,
+			gp.graphOption.CsvWithHeader,
+			gp.graphOption.CsvDataLimit,
+		)
+		gp.DataCh = make(chan common.Data, gp.graphOption.CsvChannelSize)
+		if err := gp.csvReader.ReadForever(gp.DataCh); err != nil {
+			return nil, err
+		}
+	}
 	return gp, nil
 }
 
-func (gp *GraphPool) initAndVerifyPool(address string, concurrent int, chanSize int) error {
+func (gp *GraphPool) initConnectionPool() error {
+	addr := gp.graphOption.Address
+	hosts, err := gp.validate(addr)
+	if err != nil {
+		return err
+	}
+	gp.clients = make([]common.IGraphClient, 0, gp.graphOption.MaxSize)
+	conf := graph.GetDefaultConf()
+	conf.TimeOut = time.Duration(gp.graphOption.TimeoutUs) * time.Microsecond
+	conf.IdleTime = time.Duration(gp.graphOption.IdleTimeUs) * time.Microsecond
+	var sslConfig *tls.Config
+	if gp.graphOption.SslCaPemPath != "" {
+		var err error
+		sslConfig, err = graph.GetDefaultSSLConfig(
+			gp.graphOption.SslCaPemPath,
+			gp.graphOption.SslClientPemPath,
+			gp.graphOption.SslClientKeyPath)
+		if err != nil {
+			return err
+		}
+	}
+	pool, err := graph.NewSslConnectionPool(hosts, conf, sslConfig, graph.DefaultLogger{})
+	if err != nil {
+		return err
+	}
+	gp.connPool = pool
+
+	return nil
+}
+
+func (gp *GraphPool) initSessionPool() error {
+	addr := gp.graphOption.Address
+	hosts, err := gp.validate(addr)
+	if err != nil {
+		return err
+	}
+	var sslConfig *tls.Config
+	if gp.graphOption.SslCaPemPath != "" {
+		var err error
+		sslConfig, err = graph.GetDefaultSSLConfig(
+			gp.graphOption.SslCaPemPath,
+			gp.graphOption.SslClientPemPath,
+			gp.graphOption.SslClientKeyPath)
+		if err != nil {
+			return err
+		}
+	}
+	conf, err := graph.NewSessionPoolConf(
+		gp.graphOption.Username,
+		gp.graphOption.Password,
+		hosts,
+		gp.graphOption.Space,
+		graph.WithTimeOut(time.Duration(gp.graphOption.TimeoutUs)*time.Microsecond),
+		graph.WithIdleTime(time.Duration(gp.graphOption.IdleTimeUs)*time.Microsecond),
+		graph.WithMaxSize(gp.graphOption.MaxSize),
+		graph.WithMinSize(gp.graphOption.MinSize),
+		graph.WithSSLConfig(sslConfig),
+	)
+	if err != nil {
+		return err
+	}
+	pool, err := graph.NewSessionPool(*conf, graph.DefaultLogger{})
+	if err != nil {
+		return err
+	}
+	gp.sessPool = pool
+
+	return nil
+}
+
+func (gp *GraphPool) validate(address string) ([]graph.HostAddress, error) {
 	var hosts []graph.HostAddress
 	addrs := strings.Split(address, ",")
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("Invalid address: %s", address)
+	}
 	for _, addr := range addrs {
 		hostAndPort := strings.Split(addr, ":")
 		if len(hostAndPort) != 2 {
-			return fmt.Errorf("Invalid address: %s", addr)
+			return nil, fmt.Errorf("Invalid address: %s", addr)
 		}
 		port, err := strconv.Atoi(hostAndPort[1])
 		if err != nil {
-			return err
+			return nil, err
 		}
 		hosts = append(hosts, graph.HostAddress{
 			Host: hostAndPort[0],
 			Port: port,
 		})
 	}
-
-	gp.clients = make([]common.IGraphClient, 0, concurrent)
-	conf := graph.GetDefaultConf()
-	conf.MaxConnPoolSize = concurrent * 2
-	pool, err := graph.NewConnectionPool(hosts, conf, graph.DefaultLogger{})
-	if err != nil {
-		return err
-	}
-	gp.pool = pool
-	gp.channelBufferSize = chanSize
-	gp.OutputCh = make(chan []string, gp.channelBufferSize)
-	return nil
+	return hosts, nil
 }
 
 // Deprecated ConfigCsvStrategy sets csv reader strategy
 func (gp *GraphPool) ConfigCsvStrategy(strategy int) {
 	return
-}
-
-// ConfigCSV makes the read csv file configuration
-func (gp *GraphPool) ConfigCSV(path, delimiter string, withHeader bool, opts ...interface{}) error {
-	var (
-		limit int = 500 * 10000
-	)
-	if gp.csvReader != nil {
-		return nil
-	}
-	if len(opts) > 0 {
-		l, ok := opts[0].(int)
-		if ok {
-			limit = l
-		}
-	}
-	gp.csvReader = common.NewCsvReader(path, delimiter, withHeader, limit)
-
-	if err := gp.csvReader.ReadForever(gp.DataCh); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ConfigOutput makes the output file configuration, would write the execution outputs
-func (gp *GraphPool) ConfigOutput(path string) error {
-	writer := common.NewCsvWriter(path, ",", outputHeader, gp.OutputCh)
-	if err := writer.WriteForever(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // Close closes the nebula pool
@@ -231,21 +251,53 @@ func (gp *GraphPool) Close() error {
 			s.Close()
 		}
 	}
-	gp.initialized = false
+	if gp.connPool != nil {
+		gp.connPool.Close()
+	}
+	if gp.sessPool != nil {
+		gp.sessPool.Close()
+	}
+
 	return nil
 }
 
 // GetSession gets the session from pool
-func (gp *GraphPool) GetSession(username, password string) (common.IGraphClient, error) {
-	gp.mutex.Lock()
-	defer gp.mutex.Unlock()
-	c, err := gp.pool.GetSession(username, password)
-	if err != nil {
-		return nil, err
+func (gp *GraphPool) GetSession() (common.IGraphClient, error) {
+	if gp.connPool != nil {
+		gp.mutex.Lock()
+		defer gp.mutex.Unlock()
+		c, err := gp.connPool.GetSession(
+			gp.graphOption.Username,
+			gp.graphOption.Password,
+		)
+		if err != nil {
+			return nil, err
+		}
+		_, err = c.Execute(fmt.Sprintf("USE %s", gp.graphOption.Space))
+		if err != nil {
+			return nil, err
+		}
+		s := &GraphClient{Client: c, Pool: gp, DataCh: gp.DataCh}
+		gp.clients = append(gp.clients, s)
+		return s, nil
+	} else {
+		s := &GraphClient{Client: nil, Pool: gp, DataCh: gp.DataCh}
+		return s, nil
 	}
-	s := &GraphClient{Client: c, Pool: gp, DataCh: gp.DataCh}
-	gp.clients = append(gp.clients, s)
-	return s, nil
+
+}
+
+func (gp *GraphPool) SetOption(option *common.GraphOption) error {
+	if gp.graphOption != nil {
+		return nil
+	}
+	gp.graphOption = common.MakeDefaultOption(option)
+	if err := common.ValidateOption(gp.graphOption); err != nil {
+		return err
+	}
+	bs, _ := json.Marshal(gp.graphOption)
+	fmt.Printf("testing option: %s\n", bs)
+	return nil
 }
 
 func (gc *GraphClient) Open() error {
@@ -276,13 +328,20 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 		err  error
 	)
 	start := time.Now()
-	for i := 0; i < gc.Pool.retryTimes; i++ {
-		if gc.Pool.retryTimeoutUs != 0 && time.Since(start).Microseconds() > int64(gc.Pool.retryTimeoutUs) {
-			return resp, nil
+	for i := 0; i < gc.Pool.graphOption.RetryTimes+1; i++ {
+		if gc.Pool.graphOption.RetryIntervalUs != 0 &&
+			time.Since(start).Microseconds() > int64(gc.Pool.graphOption.RetryTimeoutUs) {
+			return resp, err
 		}
-		resp, err = gc.Client.Execute(stmt)
+		if gc.Client != nil {
+			resp, err = gc.Client.Execute(stmt)
+		} else {
+			resp, err = gc.Pool.sessPool.Execute(stmt)
+		}
+
 		if err != nil {
-			return nil, err
+			fmt.Println("execute error: ", err)
+			continue
 		}
 		graphErr := resp.GetErrorCode()
 		if graphErr == graph.ErrorCode_SUCCEEDED {
@@ -292,62 +351,73 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 		if graphErr != graph.ErrorCode_E_EXECUTION_ERROR {
 			break
 		}
-		<-time.After(time.Duration(gc.Pool.retryIntervalUs) * time.Microsecond)
+		<-time.After(time.Duration(gc.Pool.graphOption.RetryIntervalUs) * time.Microsecond)
 	}
-	return resp, nil
+	return resp, err
 }
 
 // Execute executes nebula query
 func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 	start := time.Now()
 	var (
-		rows    int32
-		latency int64
+		o      *output
+		result common.IGraphResponse
 	)
 	resp, err := gc.executeRetry(stmt)
 	if err != nil {
-		return nil, err
+		// to summary the error, should validate the response is nil or not in js.
+		o = &output{
+			timeStamp:    start.Unix(),
+			nGQL:         stmt,
+			latency:      0,
+			responseTime: 0,
+			isSucceed:    false,
+			rows:         0,
+			errorMsg:     err.Error(),
+			firstRecord:  "",
+		}
+		result = nil
+	} else {
+		o = &output{
+			timeStamp:    start.Unix(),
+			nGQL:         stmt,
+			latency:      resp.GetLatency(),
+			responseTime: int32(time.Since(start) / 1000),
+			isSucceed:    resp.GetErrorCode() == graph.ErrorCode_SUCCEEDED,
+			rows:         int32(resp.GetRowSize()),
+			errorMsg:     resp.GetErrorMsg(),
+			firstRecord:  "",
+		}
+		result = &Response{ResultSet: resp, ResponseTime: o.responseTime}
+	}
+	if gc.Pool.OutputCh == nil {
+		return result, nil
 	}
 
-	rows = int32(resp.GetRowSize())
-	latency = resp.GetLatency()
-
-	responseTime := int32(time.Since(start) / 1000)
-	// output
-	if gc.Pool.OutputCh != nil {
-		var fr []string
-		columns := resp.GetColSize()
-		if rows != 0 {
-			r, err := resp.GetRowValuesByIndex(0)
+	var fr []string
+	columns := resp.GetColSize()
+	if o.rows != 0 {
+		r, err := resp.GetRowValuesByIndex(0)
+		if err != nil {
+			return nil, err
+		}
+		for i := 0; i < columns; i++ {
+			v, err := r.GetValueByIndex(i)
 			if err != nil {
 				return nil, err
 			}
-			for i := 0; i < columns; i++ {
-				v, err := r.GetValueByIndex(i)
-				if err != nil {
-					return nil, err
-				}
-				fr = append(fr, v.String())
-			}
+			fr = append(fr, v.String())
 		}
-		o := &output{
-			timeStamp:    start.Unix(),
-			nGQL:         stmt,
-			latency:      latency,
-			responseTime: responseTime,
-			isSucceed:    resp.GetErrorCode() == graph.ErrorCode_SUCCEEDED,
-			rows:         rows,
-			errorMsg:     resp.GetErrorMsg(),
-			firstRecord:  strings.Join(fr, "|"),
-		}
-		select {
-		case gc.Pool.OutputCh <- formatOutput(o):
-		// abandon if the output chan is full.
-		default:
-		}
+	}
+	o.firstRecord = strings.Join(fr, "|")
+
+	select {
+	case gc.Pool.OutputCh <- formatOutput(o):
+	// abandon if the output chan is full.
+	default:
 
 	}
-	return &Response{ResultSet: resp, ResponseTime: responseTime}, nil
+	return result, nil
 }
 
 // GetResponseTime GetResponseTime
