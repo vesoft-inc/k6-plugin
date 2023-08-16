@@ -4,8 +4,9 @@ all: build
 pairs := darwin/amd64 linux/amd64 linux/arm64
 GOPATH ?= ~/go
 export GO111MODULE=on
-K6_VERSION ?= v0.43.0
+K6_VERSION ?= v0.45.1
 XK6_VERSION ?= v0.9.2
+VERSION=$(shell git describe --tags `git rev-list --tags --max-count=1`)
 
 fmt:
 	find . -name '*.go' -exec gofmt -s -w {} +
@@ -15,13 +16,11 @@ lint :
 
 build: 
 	go install go.k6.io/xk6/cmd/xk6@${XK6_VERSION}
-	version=$(git describe --tags `git rev-list --tags --max-count=1`) \
-	$(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@$(version) ; 
+	$(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@$(VERSION) ; 
 
 build-all: build-arm-v7
-
 	go install go.k6.io/xk6/cmd/xk6@${XK6_VERSION}
-	for  pair in $(pairs);do echo $$pair; \
+	for pair in $(pairs);do echo $$pair; \
 		os=`echo $$pair | cut -d / -f 1 ` ;\
 		arch=`echo $$pair | cut -d / -f 2 ` ;\
 		GOOS=$$os GOARCH=$$arch $(GOPATH)/bin/xk6 build $(K6_VERSION) --with github.com/vesoft-inc/k6-plugin@$(VERSION) ;\
