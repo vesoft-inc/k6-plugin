@@ -149,6 +149,8 @@ func (gp *GraphPool) initConnectionPool() error {
 	}
 	gp.clients = make([]common.IGraphClient, 0, gp.graphOption.MaxSize)
 	conf := graph.GetDefaultConf()
+	conf.MaxConnPoolSize = gp.graphOption.MaxSize
+	conf.MinConnPoolSize = gp.graphOption.MinSize
 	conf.TimeOut = time.Duration(gp.graphOption.TimeoutUs) * time.Microsecond
 	conf.IdleTime = time.Duration(gp.graphOption.IdleTimeUs) * time.Microsecond
 	var sslConfig *tls.Config
@@ -329,7 +331,6 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 	)
 	start := time.Now()
 	for i := 0; i < gc.Pool.graphOption.RetryTimes+1; i++ {
-
 		if gc.Client != nil {
 			resp, err = gc.Client.Execute(stmt)
 		} else {
