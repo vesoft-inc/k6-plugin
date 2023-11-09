@@ -62,12 +62,13 @@ export default function(data) {
 	ngql = ngql + " " + batches.join(',')
 	let response = session.execute(ngql)
 	check(response, {
-		"IsSucceed": (r) => r.isSucceed() === true
+		"IsSucceed": (r) => r !== null && r.isSucceed() === true
 	});
 	// add trend
-	latencyTrend.add(response.getLatency());
-	responseTrend.add(response.getResponseTime());
-
+	if (response !== null) {
+		latencyTrend.add(response.getLatency() / 1000);
+		responseTrend.add(response.getResponseTime() / 1000);
+	}
 };
 
 export function teardown() {

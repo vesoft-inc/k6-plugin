@@ -23,12 +23,14 @@ type (
 		DataCh      chan common.Data
 		OutputCh    chan []string
 		initialized bool
+		closed      bool
 		mutex       sync.Mutex
 		csvReader   common.ICsvReader
 		connPool    *graph.ConnectionPool
 		sessPool    *graph.SessionPool
 		clients     []common.IGraphClient
 		graphOption *common.GraphOption
+		logger      logger
 	}
 
 	// GraphClient a wrapper for nebula client, could read data from DataCh
@@ -36,6 +38,7 @@ type (
 		Client *graph.Session
 		Pool   *GraphPool
 		DataCh chan common.Data
+		logger logger
 	}
 
 	// Response a wrapper for nebula resultSet
@@ -55,6 +58,14 @@ type (
 		rows         int32
 		errorMsg     string
 		firstRecord  string
+	}
+
+	logger interface {
+		Info(msg string)
+		Warn(msg string)
+		Debug(msg string)
+		Error(msg string)
+		Fatal(msg string)
 	}
 )
 
@@ -102,10 +113,16 @@ func (gp *GraphPool) Init() (common.IGraphClientPool, error) {
 	var (
 		err error
 	)
+	gp.mutex.Lock()
+	defer gp.mutex.Unlock()
 	if gp.initialized {
 		return gp, nil
 	}
 
+	if gp.closed {
+		return nil, fmt.Errorf("pool has been closed")
+	}
+	gp.logger.Debug("initializing graph pool")
 	switch gp.graphOption.PoolPolicy {
 	case string(common.ConnectionPool):
 		err = gp.initConnectionPool()
@@ -204,7 +221,7 @@ func (gp *GraphPool) initSessionPool() error {
 	if err != nil {
 		return err
 	}
-	pool, err := graph.NewSessionPool(*conf, graph.DefaultLogger{})
+	pool, err := graph.NewSessionPool(*conf, gp.logger)
 	if err != nil {
 		return err
 	}
@@ -259,6 +276,7 @@ func (gp *GraphPool) Close() error {
 	if gp.sessPool != nil {
 		gp.sessPool.Close()
 	}
+	gp.closed = true
 
 	return nil
 }
@@ -279,11 +297,11 @@ func (gp *GraphPool) GetSession() (common.IGraphClient, error) {
 		if err != nil {
 			return nil, err
 		}
-		s := &GraphClient{Client: c, Pool: gp, DataCh: gp.DataCh}
+		s := &GraphClient{Client: c, Pool: gp, DataCh: gp.DataCh, logger: gp.logger}
 		gp.clients = append(gp.clients, s)
 		return s, nil
 	} else {
-		s := &GraphClient{Client: nil, Pool: gp, DataCh: gp.DataCh}
+		s := &GraphClient{Client: nil, Pool: gp, DataCh: gp.DataCh, logger: gp.logger}
 		return s, nil
 	}
 
@@ -298,7 +316,7 @@ func (gp *GraphPool) SetOption(option *common.GraphOption) error {
 		return err
 	}
 	bs, _ := json.Marshal(gp.graphOption)
-	fmt.Printf("testing option: %s\n", bs)
+	gp.logger.Debug(fmt.Sprintf("testing option: %s\n", bs))
 	return nil
 }
 
@@ -341,7 +359,7 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 			return resp, fmt.Errorf("retry timeout")
 		}
 		if err != nil {
-			fmt.Println("execute error: ", err)
+			gc.logger.Warn(fmt.Sprintf("execute error: %s", err.Error()))
 			continue
 		}
 

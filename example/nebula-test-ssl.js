@@ -48,12 +48,13 @@ export default function(data) {
 	let ngql = 'go 2 steps from {0} over KNOWS yield dst(edge)'.format(d)
 	let response = session.execute(ngql)
 	check(response, {
-		"IsSucceed": (r) => r.isSucceed() === true
+		"IsSucceed": (r) => r !== null && r.isSucceed() === true
 	});
 	// add trend
-	latencyTrend.add(response.getLatency() / 1000);
-	responseTrend.add(response.getResponseTime() / 1000);
-
+	if (response !== null) {
+		latencyTrend.add(response.getLatency() / 1000);
+		responseTrend.add(response.getResponseTime() / 1000);
+	}
 };
 
 export function teardown() {
