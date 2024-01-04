@@ -68,6 +68,7 @@ type (
 		Username   string `json:"username"`
 		Password   string `json:"password"`
 		Space      string `json:"space"`
+		UseHttp    bool   `json:"use_http"`
 	}
 
 	OutputOption struct {
