@@ -181,6 +181,10 @@ func (gp *GraphPool) initConnectionPool() error {
 			return err
 		}
 	}
+	if gp.graphOption.UseHttp {
+		conf.UseHTTP2 = true
+	}
+
 	pool, err := graph.NewSslConnectionPool(hosts, conf, sslConfig, graph.DefaultLogger{})
 	if err != nil {
 		return err
@@ -217,6 +221,7 @@ func (gp *GraphPool) initSessionPool() error {
 		graph.WithMaxSize(gp.graphOption.MaxSize),
 		graph.WithMinSize(gp.graphOption.MinSize),
 		graph.WithSSLConfig(sslConfig),
+		graph.WithHTTP2(gp.graphOption.UseHttp),
 	)
 	if err != nil {
 		return err
