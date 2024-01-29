@@ -383,6 +383,7 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 
 // Execute executes nebula query
 func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
+	stmt = common.ProcessStmt(stmt)
 	start := time.Now()
 	var (
 		o      *output
