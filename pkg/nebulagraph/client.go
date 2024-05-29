@@ -170,6 +170,9 @@ func (gp *GraphPool) initConnectionPool() error {
 	conf.MinConnPoolSize = gp.graphOption.MinSize
 	conf.TimeOut = time.Duration(gp.graphOption.TimeoutUs) * time.Microsecond
 	conf.IdleTime = time.Duration(gp.graphOption.IdleTimeUs) * time.Microsecond
+	conf.UseHTTP2 = gp.graphOption.HttpEnable
+	conf.HttpHeader = gp.graphOption.HttpHeader
+
 	var sslConfig *tls.Config
 	if gp.graphOption.SslCaPemPath != "" {
 		var err error
@@ -181,10 +184,6 @@ func (gp *GraphPool) initConnectionPool() error {
 			return err
 		}
 	}
-	if gp.graphOption.UseHttp {
-		conf.UseHTTP2 = true
-	}
-
 	pool, err := graph.NewSslConnectionPool(hosts, conf, sslConfig, graph.DefaultLogger{})
 	if err != nil {
 		return err
@@ -221,7 +220,8 @@ func (gp *GraphPool) initSessionPool() error {
 		graph.WithMaxSize(gp.graphOption.MaxSize),
 		graph.WithMinSize(gp.graphOption.MinSize),
 		graph.WithSSLConfig(sslConfig),
-		graph.WithHTTP2(gp.graphOption.UseHttp),
+		graph.WithHTTP2(gp.graphOption.HttpEnable),
+		graph.WithHttpHeader(gp.graphOption.HttpHeader),
 	)
 	if err != nil {
 		return err
@@ -383,7 +383,6 @@ func (gc *GraphClient) executeRetry(stmt string) (*graph.ResultSet, error) {
 
 // Execute executes nebula query
 func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
-	stmt = common.ProcessStmt(stmt)
 	start := time.Now()
 	var (
 		o      *output
