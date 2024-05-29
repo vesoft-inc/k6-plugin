@@ -56,6 +56,7 @@ type (
 		CsvOption    `json:",inline"`
 		RetryOption  `json:",inline"`
 		SSLOption    `json:",inline"`
+		Http2Option  `json:",inline"`
 	}
 
 	PoolOption struct {
@@ -68,7 +69,6 @@ type (
 		Username   string `json:"username"`
 		Password   string `json:"password"`
 		Space      string `json:"space"`
-		UseHttp    bool   `json:"use_http"`
 	}
 
 	OutputOption struct {
@@ -93,6 +93,10 @@ type (
 		RetryTimes      int `json:"retry_times"`
 		RetryIntervalUs int `json:"retry_interval_us"`
 		RetryTimeoutUs  int `json:"retry_timeout_us"`
+	}
+	Http2Option struct {
+		HttpEnable bool                `json:"http_enable"`
+		HttpHeader map[string][]string `json:"http_header"`
 	}
 )
 
