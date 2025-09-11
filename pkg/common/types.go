@@ -56,6 +56,7 @@ type (
 		CsvOption    `json:",inline"`
 		RetryOption  `json:",inline"`
 		SSLOption    `json:",inline"`
+		ExtraOptions any `json:"extra_options,omitempty"`
 	}
 
 	PoolOption struct {
