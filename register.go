@@ -3,12 +3,14 @@ package k6plugin
 import (
 	"github.com/vesoft-inc/k6-plugin/pkg/aggcsv"
 	"github.com/vesoft-inc/k6-plugin/pkg/nebulagraph"
+	"github.com/vesoft-inc/k6-plugin/pkg/nebulagraph5"
 	"go.k6.io/k6/js/modules"
 	"go.k6.io/k6/output"
 )
 
 func init() {
 	modules.Register("k6/x/nebulagraph", nebulagraph.NewModule())
+	modules.Register("k6/x/nebulagraph5", nebulagraph5.NewModule())
 	output.RegisterExtension("aggcsv", func(p output.Params) (output.Output, error) {
 		return aggcsv.New(p)
 	})
