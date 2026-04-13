@@ -4,6 +4,7 @@ import "github.com/kelseyhightower/envconfig"
 
 type Environment struct {
 	NebulaStmtPrefix string `envconfig:"STMT_PREFIX" `
+	NebulaSkipScan   bool   `envconfig:"SKIP_SCAN" default:"false"`
 }
 
 var nebulaEnv *Environment
@@ -26,4 +27,8 @@ func ProcessStmt(stmt string) string {
 		stmt = nebulaEnv.NebulaStmtPrefix + " " + stmt
 	}
 	return stmt
+}
+
+func ShouldSkipScan() bool {
+	return nebulaEnv.NebulaSkipScan
 }

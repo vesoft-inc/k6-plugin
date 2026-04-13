@@ -354,11 +354,12 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 			}
 		}
 	}
-	//TODO could add a flag to just decode the first row
-	if rows != 0 {
-		for resp.HasNext() {
-			if err := resp.Scan(anyValues...); err != nil {
-				return nil, err
+	if !common.ShouldSkipScan() {
+		if rows != 0 {
+			for resp.HasNext() {
+				if err := resp.Scan(anyValues...); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

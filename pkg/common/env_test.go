@@ -18,3 +18,11 @@ func TestProcessStmt(t *testing.T) {
 	getEnv()
 	assert.Equal(t, "nebula stmt", ProcessStmt("stmt"))
 }
+
+func TestSkipScan(t *testing.T) {
+	getEnv()
+	assert.False(t, ShouldSkipScan())
+	os.Setenv("NEBULA_SKIP_SCAN", "true")
+	getEnv()
+	assert.True(t, ShouldSkipScan())
+}
