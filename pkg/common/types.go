@@ -28,6 +28,7 @@ type (
 		GetData() (Data, error)
 		GetFileData(sourceFile string) (Data, error)
 		Execute(stmt string) (IGraphResponse, error)
+		ExecuteWithTimeout(stmt string, timeoutMs int) (IGraphResponse, error)
 	}
 
 	// IGraphResponse graph response, just support some functions to user.
