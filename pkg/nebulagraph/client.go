@@ -437,6 +437,10 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 	return result, nil
 }
 
+func (gc *GraphClient) ExecuteWithTimeout(stmt string, timeoutMs int) (common.IGraphResponse, error) {
+	return nil, fmt.Errorf("ExecuteWithTimeout is not supported by nebulagraph client")
+}
+
 // GetResponseTime GetResponseTime
 func (r *Response) GetResponseTime() int32 {
 	return r.ResponseTime

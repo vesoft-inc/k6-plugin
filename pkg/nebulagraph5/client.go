@@ -1,6 +1,7 @@
 package nebulagraph5
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -295,6 +296,14 @@ func (gc *GraphClient) GetFileData(sourceFile string) (common.Data, error) {
 
 // Execute executes nebula query
 func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
+	return gc.execute(stmt, 0)
+}
+
+func (gc *GraphClient) ExecuteWithTimeout(stmt string, timeoutMs int) (common.IGraphResponse, error) {
+	return gc.execute(stmt, timeoutMs)
+}
+
+func (gc *GraphClient) execute(stmt string, timeoutMs int) (common.IGraphResponse, error) {
 	var (
 		isSucceed  bool = true
 		errMessage string
@@ -320,7 +329,7 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 		}
 		gc.since = time.Now()
 	}
-	resp, err = gc.executeWithRetry(stmt)
+	resp, err = gc.executeWithRetry(stmt, timeoutMs)
 
 	if err != nil {
 		isSucceed = false
@@ -386,7 +395,7 @@ func (gc *GraphClient) Execute(stmt string) (common.IGraphResponse, error) {
 	return &Response{ResultSet: resp, ResponseTime: responseTime, err: err}, nil
 }
 
-func (gc *GraphClient) executeWithRetry(stmt string) (types.Result, error) {
+func (gc *GraphClient) executeWithRetry(stmt string, timeoutMs int) (types.Result, error) {
 	var (
 		err  error
 		resp types.Result
@@ -403,7 +412,7 @@ func (gc *GraphClient) executeWithRetry(stmt string) (types.Result, error) {
 		if i > 0 {
 			gc.Pool.logger.Warnf("execute statement failed, retry %d time, error: %s\n", i, err.Error())
 		}
-		resp, err = gc.execute(stmt)
+		resp, err = gc.executeOnce(stmt, timeoutMs)
 		if err == nil {
 			return resp, nil
 		} else {
@@ -415,7 +424,7 @@ func (gc *GraphClient) executeWithRetry(stmt string) (types.Result, error) {
 	return nil, err
 }
 
-func (gc *GraphClient) execute(stmt string) (types.Result, error) {
+func (gc *GraphClient) executeOnce(stmt string, timeoutMs int) (types.Result, error) {
 	if gc.Session == nil || gc.Session.IsClosed() {
 		sess, err := gc.Pool.pool.GetClient()
 		if err != nil {
@@ -423,7 +432,17 @@ func (gc *GraphClient) execute(stmt string) (types.Result, error) {
 		}
 		gc.Session = sess
 	}
-	resp, err := gc.Session.Execute(stmt)
+	var (
+		resp types.Result
+		err  error
+	)
+	if timeoutMs > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
+		defer cancel()
+		resp, err = gc.Session.ExecuteContext(ctx, stmt)
+	} else {
+		resp, err = gc.Session.Execute(stmt)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("execute statement failed: %s, error: %w", stmt, err)
 	}
